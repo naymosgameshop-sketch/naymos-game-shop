@@ -47,21 +47,13 @@ export async function Header() {
       <div className="mx-auto max-w-7xl px-3 sm:px-6">
         <div className="flex h-16 sm:h-18 items-center justify-between gap-2 sm:gap-4">
           {/* Logo with Mascot */}
-          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 shrink-0 group">
+          <Link href="/" className="flex items-center shrink-0 group py-1" aria-label="NayMos GameShop หน้าหลัก">
             <div className="relative h-10 sm:h-12 w-auto shrink-0 flex items-center group-hover:scale-105 transition-transform duration-200">
               <img
                 src="/images/logo.webp"
                 alt="NayMos GameShop"
                 className="h-10 sm:h-12 w-auto object-contain select-none"
               />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-base sm:text-lg tracking-tight text-sky-950 flex items-center gap-1">
-                NayMos <span className="text-sky-500 font-black">GameShop</span>
-              </span>
-              <span className="hidden sm:inline text-[10px] text-sky-600 font-medium tracking-wide">
-                บริการเติมเกมออนไลน์ 100%
-              </span>
             </div>
           </Link>
 
