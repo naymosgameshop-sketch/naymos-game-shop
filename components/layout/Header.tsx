@@ -3,7 +3,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { User, ShoppingCart } from 'lucide-react';
 import { getProfile } from '@/lib/auth/get-user';
-import { LogoutButton } from '@/components/auth/LogoutButton';
 import { createClient } from '@/lib/supabase/server';
 import { HeaderNav } from './HeaderNav';
 
@@ -63,31 +62,20 @@ export async function Header() {
           {/* User actions */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {profile ? (
-              <>
-                <Link
-                  href="/account"
-                  className="flex items-center gap-1.5 rounded-full bg-sky-50 border border-sky-200 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-sky-900 hover:bg-sky-100 hover:border-sky-300 transition max-w-[130px] sm:max-w-[160px] shadow-xs"
-                >
-                  <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-600 shrink-0" />
-                  <span className="truncate">
-                    {profile.full_name || profile.email?.split('@')[0] || 'บัญชีของฉัน'}
-                  </span>
-                </Link>
-                {(profile.role === 'admin' || profile.role === 'super_admin') && (
-                  <Link
-                    href="/admin"
-                    className="hidden lg:inline-flex rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800 transition shadow-xs"
-                  >
-                    หลังบ้าน
-                  </Link>
-                )}
+              <Link
+                href="/account"
+                className="flex items-center gap-1.5 rounded-full bg-sky-50 border border-sky-200 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-sky-900 hover:bg-sky-100 hover:border-sky-300 transition max-w-[140px] sm:max-w-[180px] shadow-xs"
+              >
+                <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-600 shrink-0" />
+                <span className="truncate">
+                  {profile.full_name || profile.email?.split('@')[0] || 'บัญชีของฉัน'}
+                </span>
                 {profile.role === 'reseller' && (
-                  <span className="hidden lg:inline-flex items-center rounded-full bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 shadow-xs">
+                  <span className="hidden sm:inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-700">
                     ตัวแทน
                   </span>
                 )}
-                <LogoutButton />
-              </>
+              </Link>
             ) : (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <Link
