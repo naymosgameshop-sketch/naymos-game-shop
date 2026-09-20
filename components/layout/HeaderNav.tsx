@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Home,
   Gamepad2,
+  Package,
   Gift,
   HelpCircle,
   FileQuestion,
@@ -29,13 +30,14 @@ export function HeaderNav({ activeOrderCount = 0, profile }: HeaderNavProps) {
 
   const isHomeActive = pathname === '/';
   const isGamesActive = pathname === '/games' || pathname.startsWith('/games/');
+  const isProductsActive = pathname === '/products' || pathname.startsWith('/products/');
   const isTrackingActive = pathname === '/order-tracking' || pathname.startsWith('/order-tracking/');
   const isPromotionsActive = pathname === '/promotions' || pathname.startsWith('/promotions/');
   const isHowToActive = pathname === '/how-to' || pathname.startsWith('/how-to/');
   const isFaqActive = pathname === '/faq' || pathname.startsWith('/faq/');
 
   // Ordered strictly according to user requirements:
-  // 1. หน้าหลัก 2. เกมทั้งหมด 3. ติดตามออเดอร์ 4. โปรโมชั่น 5. วิธีการเติม 6. คำถาม
+  // 1. หน้าหลัก 2. เติมเกม 3. รายการสินค้า 4. ติดตามออเดอร์ 5. โปรโมชั่น 6. วิธีการเติม 7. คำถาม
   const navItems = [
     {
       href: '/',
@@ -45,9 +47,15 @@ export function HeaderNav({ activeOrderCount = 0, profile }: HeaderNavProps) {
     },
     {
       href: '/games',
-      label: 'รายการทั้งหมด',
+      label: 'เติมเกม',
       icon: Gamepad2,
       isActive: isGamesActive,
+    },
+    {
+      href: '/products',
+      label: 'รายการสินค้า',
+      icon: Package,
+      isActive: isProductsActive,
     },
     {
       href: '/order-tracking',
