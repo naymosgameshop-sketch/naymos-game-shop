@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Check, Download, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Download, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { generatePromptPayPayload } from '@/lib/payments/promptpay';
 
 interface PromptPayQRCardProps {
@@ -23,36 +23,45 @@ export function PromptPayQRCard({
   showDetails = true,
 }: PromptPayQRCardProps) {
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const targetAccount = (promptpayId || '0988251064').trim();
+  const targetAccount = (promptpayId && promptpayId.trim().length > 0 ? promptpayId : '0988251064').trim();
   const targetName = accountName || 'ศักดาวิชญ์ คำใจ';
   const targetBank = bankName || 'พร้อมเพย์';
 
   useEffect(() => {
     let cancelled = false;
-    const payload = generatePromptPayPayload(targetAccount, amount);
-    const canvas = document.createElement('canvas');
-    canvasRef.current = canvas;
-    const qrSize = 360;
+    setError(null);
 
-    QRCode.toCanvas(
-      canvas,
-      payload,
-      {
-        width: qrSize,
-        margin: 2,
-        errorCorrectionLevel: 'H',
-        color: {
-          dark: '#0369a1', // Sky-700
-          light: '#ffffff',
-        },
-      },
-      (err) => {
-        if (err || cancelled) return;
-        setQrImageUrl(canvas.toDataURL('image/png'));
+    async function generate() {
+      try {
+        const payload = generatePromptPayPayload(targetAccount, amount);
+        if (!payload || !payload.startsWith('000201')) {
+          throw new Error('ไม่สามารถสร้างรหัส PromptPay Payload ได้');
+        }
+
+        const url = await QRCode.toDataURL(payload, {
+          width: 360,
+          margin: 2,
+          errorCorrectionLevel: 'H',
+          color: {
+            dark: '#0369a1', // Sky-700
+            light: '#ffffff',
+          },
+        });
+
+        if (!cancelled) {
+          setQrImageUrl(url);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('PromptPay QR generation error:', err);
+          setError(err instanceof Error ? err.message : 'ไม่สามารถสร้าง QR Code ได้');
+        }
       }
-    );
+    }
+
+    void generate();
 
     return () => {
       cancelled = true;
@@ -71,7 +80,7 @@ export function PromptPayQRCard({
 
   return (
     <div className="flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl bg-white border border-sky-100 shadow-sm w-full max-w-[340px] mx-auto select-none">
-      {/* Header instruction without phone number */}
+      {/* Header instruction */}
       <div className="w-full text-center mb-3">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-200 text-sky-800 text-xs font-bold">
           <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
@@ -79,7 +88,7 @@ export function PromptPayQRCard({
         </span>
       </div>
 
-      {/* QR Container with anti-fraud watermark border */}
+      {/* QR Container */}
       <div className="relative p-2.5 bg-white rounded-2xl border-2 border-sky-300 shadow-xs flex flex-col items-center">
         {qrImageUrl ? (
           <div className="relative group">
@@ -89,6 +98,11 @@ export function PromptPayQRCard({
               alt="สแกน QR Code เพื่อชำระเงิน"
               className="w-56 h-56 sm:w-60 sm:h-60 object-contain rounded-xl bg-white"
             />
+          </div>
+        ) : error ? (
+          <div className="w-56 h-56 sm:w-60 sm:h-60 flex flex-col items-center justify-center text-rose-500 gap-2 bg-rose-50/50 rounded-xl border border-rose-100 p-4 text-center">
+            <AlertTriangle className="h-7 w-7 text-rose-500" />
+            <span className="text-xs font-medium">{error}</span>
           </div>
         ) : (
           <div className="w-56 h-56 sm:w-60 sm:h-60 flex flex-col items-center justify-center text-slate-400 gap-2 bg-sky-50/50 rounded-xl border border-sky-100">
@@ -110,7 +124,7 @@ export function PromptPayQRCard({
 
       {showDetails && (
         <div className="w-full mt-3 flex flex-col items-center text-center space-y-2">
-          {/* Account name & bank only — NO phone number displayed */}
+          {/* Account name & bank only */}
           <div className="rounded-xl bg-slate-50 border border-slate-200/80 px-3.5 py-2 w-full text-left">
             <div className="text-xs text-slate-600 flex justify-between items-center">
               <span>ชื่อบัญชี:</span>
@@ -126,7 +140,7 @@ export function PromptPayQRCard({
             <button
               type="button"
               onClick={downloadQr}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold transition cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               บันทึกรูป QR Code
