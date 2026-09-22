@@ -27,6 +27,7 @@ import {
   ChevronRight,
   ListOrdered,
   Sparkles,
+  CreditCard,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -169,12 +170,21 @@ export function ActiveOrdersTracker({
               {/* Status Banner with Deterministic Pure CSS animations */}
               <div className="rounded-xl p-3 border">
                 {isPending && (
-                  <div className="flex items-center gap-2 text-amber-700 bg-amber-50/80 -m-3 p-3 rounded-xl border border-amber-200">
-                    <Clock className="w-4 h-4 shrink-0" />
-                    <div className="text-xs">
-                      <span className="font-bold block">รอชำระเงิน</span>
-                      <span className="text-[11px] text-amber-600">กรุณาชำระเงินและอัปโหลดสลิปเพื่อเข้าคิว</span>
+                  <div className="flex items-center justify-between text-amber-700 bg-amber-50/80 -m-3 p-3 rounded-xl border border-amber-200">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 shrink-0" />
+                      <div className="text-xs">
+                        <span className="font-bold block">รอชำระเงิน</span>
+                        <span className="text-[11px] text-amber-600">กรุณาชำระเงินและอัปโหลดสลิปเพื่อเข้าคิว</span>
+                      </div>
                     </div>
+                    <Link
+                      href={`/pay/${o.order_number}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition shadow-2xs shrink-0 ml-2"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      ชำระเงิน
+                    </Link>
                   </div>
                 )}
 
