@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth/get-user';
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { resolveActiveRoute, createApiTransaction, recordApiLog } from '@/lib/providers/central-router';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'packageId is required' }, { status: 400 });
     }
 
-    const supabase = await createServerClient();
+    const supabase = await createClient();
 
     // 1. Fetch package and parent product
     const { data: pkg, error: pkgErr } = await supabase
