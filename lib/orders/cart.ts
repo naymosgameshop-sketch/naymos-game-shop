@@ -10,18 +10,31 @@ function stablePlayerData(data: PlayerData): string {
 }
 
 export function cartItemKey(item: Pick<CartItem, "productId" | "playerData">): string {
-  return `${item.productId}:${stablePlayerData(item.playerData ?? {})}`;
+  return ;
 }
 
-export function normalizeCartItems(items: CartItem[]): CartItem[] {
+export function normalizeCartItems(items: (CartItem | Record<string, any>)[]): CartItem[] {
   const merged = new Map<string, CartItem>();
-  for (const item of items) {
-    if (!item || typeof item.productId !== "string" || typeof item.gameId !== "string") continue;
-    const quantity = Math.max(MIN_CART_QUANTITY, Math.floor(Number(item.quantity) || 0));
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") continue;
+    const productId = typeof raw.productId === "string" ? raw.productId : (typeof raw.product_id === "string" ? raw.product_id : null);
+    const gameId = typeof raw.gameId === "string" ? raw.gameId : (typeof raw.game_id === "string" ? raw.game_id : null);
+    if (!productId || !gameId) continue;
+
+    const quantity = Math.max(MIN_CART_QUANTITY, Math.floor(Number(raw.quantity) || 0));
+    const rawPlayerData = raw.playerData ?? raw.player_data ?? {};
+    const playerData = (typeof rawPlayerData === "object" && rawPlayerData !== null ? rawPlayerData : {}) as PlayerData;
+
+    const item: CartItem = {
+      productId,
+      gameId,
+      quantity,
+      playerData,
+    };
     const key = cartItemKey(item);
     const existing = merged.get(key);
     if (existing) existing.quantity += quantity;
-    else merged.set(key, { ...item, quantity, playerData: { ...(item.playerData ?? {}) } });
+    else merged.set(key, item);
   }
   return Array.from(merged.values());
 }
