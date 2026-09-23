@@ -94,17 +94,30 @@ export async function DELETE(
     const { id } = await params;
     const supabase = await createClient();
 
-    // Soft disable instead of deleting hard to preserve audit logs
+    // Clean up dependent foreign keys if needed before deleting provider
+    await supabase.from('provider_routes').delete().eq('provider_id', id);
+    await supabase.from('api_transactions').delete().eq('provider_id', id);
+    await supabase.from('api_logs').delete().eq('provider_id', id);
+
     const { error } = await supabase
       .from('providers')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .delete()
       .eq('id', id);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      // Fallback to soft disable if delete is blocked by constraint
+      const { error: softErr } = await supabase
+        .from('providers')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (softErr) {
+        return NextResponse.json({ error: error.message || softErr.message }, { status: 500 });
+      }
+      return NextResponse.json({ success: true, message: 'Provider disabled' });
     }
 
-    return NextResponse.json({ success: true, message: 'Provider disabled safely' });
+    return NextResponse.json({ success: true, message: 'Provider deleted successfully' });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
