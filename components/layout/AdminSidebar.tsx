@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Server,
   DollarSign,
+  Smartphone,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -34,7 +35,8 @@ const NAV_ITEMS = [
   { href: '/admin/payments', label: 'รายการชำระเงิน', icon: CreditCard },
   { href: '/admin/games', label: 'จัดการเกม', icon: Gamepad2 },
   { href: '/admin/categories', label: 'หมวดหมู่สินค้า', icon: Layers },
-  { href: '/admin/products', label: 'จัดการสินค้า/แพ็กเกจ', icon: Package },
+  { href: '/admin/products', label: 'จัดการสินค้า/แพ็กเกจเกม', icon: Package },
+  { href: '/admin/digital-products', label: 'จัดการแอปพรีเมียม / สินค้าดิจิทัล', icon: Smartphone },
   { href: '/admin/customers', label: 'จัดการลูกค้า', icon: Users },
   { href: '/admin/coupons', label: 'คูปองส่วนลด', icon: Tag },
   { href: '/admin/promotions', label: 'โปรโมชั่น', icon: Gift },
@@ -45,7 +47,7 @@ const NAV_ITEMS = [
   { href: '/admin/support', label: 'ฝ่ายสนับสนุน', icon: LifeBuoy },
   { href: '/admin/reports', label: 'รายงานยอดขาย', icon: FileText },
   { href: '/admin/finance', label: 'การเงิน & กำไร', icon: DollarSign },
-  { href: '/admin/providers', label: 'ผู้ให้บริการเติมเงิน', icon: Server },
+  { href: '/admin/providers', label: 'ผู้ให้บริการเติมเงิน & API', icon: Server },
   { href: '/admin/settings', label: 'ตั้งค่าร้านค้า', icon: Settings },
 ];
 
@@ -110,7 +112,7 @@ export function AdminSidebar() {
             >
               <div className="flex items-center gap-2.5">
                 <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </div>
               {item.hasBadge && pendingCount > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
