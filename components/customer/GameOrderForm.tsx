@@ -101,7 +101,7 @@ export function GameOrderForm({ game, userRole, isLoggedIn, initialTerms = '' }:
     if (cartItems.length === 0) { setError('ตะกร้าว่าง'); return; }
     setTermsError(false); setLoading(true); setError(null);
     try {
-      const res = await fetch('/api/orders/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: normalizeCartItems(cartItems).map((item) => ({ product_id: item.productId, game_id: item.gameId, quantity: item.quantity, player_data: item.playerData })) }) });
+      const res = await fetch('/api/orders/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: normalizeCartItems(cartItems).map((item) => ({ productId: item.productId, gameId: item.gameId, quantity: item.quantity, playerData: item.playerData })), couponCode: couponCode.trim() || undefined }) });
       const data = await res.json();
       if (!res.ok || !data.order) throw new Error(data.error || 'สร้างคำสั่งซื้อไม่สำเร็จ');
       setOrderNumber(data.order.order_number); setFinalAmount(Number(data.order.total)); setCartItems([]); setStep(3);
