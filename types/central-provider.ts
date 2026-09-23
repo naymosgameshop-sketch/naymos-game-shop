@@ -1,46 +1,86 @@
-export type ProviderType = 'GAME_TOPUP' | 'PREMIUM_APP' | 'DIGITAL_PRODUCT' | 'ALL';
+export type ProviderCategory =
+  | 'GAME_TOPUP'
+  | 'PREMIUM_APP'
+  | 'DIGITAL_PRODUCT'
+  | 'PAYMENT'
+  | 'AI'
+  | 'NOTIFICATION'
+  | 'CUSTOM';
+
+export type ProviderEnvironment = 'sandbox' | 'production';
+
 export type ProviderHealthStatus = 'HEALTHY' | 'DEGRADED' | 'DOWN' | 'UNKNOWN';
-export type ApiTransactionStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'UNKNOWN' | 'CANCELLED';
 
 export interface CentralProvider {
   id: string;
   name: string;
   code: string;
-  type: ProviderType;
-  api_base_url?: string | null;
+  type: string;
+  category: ProviderCategory;
+  api_base_url: string | null;
+  api_key?: string | null;
+  api_secret?: string | null;
+  credentials_preview?: string | null;
   is_active: boolean;
+  is_test_mode: boolean;
+  environment: ProviderEnvironment;
   priority: number;
-  balance: number;
-  currency: string;
+  balance?: number;
+  currency?: string;
   health_status: ProviderHealthStatus;
   last_check_at?: string | null;
-  supported_types: string[];
+  health_response_ms?: number | null;
+  timeout_ms: number;
+  max_retries: number;
+  config?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface ProviderRoute {
+export interface CentralProviderRoute {
   id: string;
+  route_key?: string;
   target_type: 'GAME_PRODUCT' | 'DIGITAL_PRODUCT_PACKAGE';
   target_id: string;
   provider_id: string;
   provider_product_id?: string | null;
+  failover_provider_id?: string | null;
   priority: number;
   is_active: boolean;
+  timeout_ms?: number;
+  max_retries?: number;
+  provider?: CentralProvider;
+  failover_provider?: CentralProvider;
 }
 
-export interface ApiTransaction {
-  id: string;
-  order_id?: string | null;
-  order_number?: string | null;
-  provider_id?: string | null;
-  target_type?: string | null;
-  target_id?: string | null;
-  provider_product_id?: string | null;
-  request_payload?: Record<string, unknown> | null;
-  response_payload?: Record<string, unknown> | null;
-  provider_order_id?: string | null;
-  status: ApiTransactionStatus;
-  cost?: number | null;
-  error_message?: string | null;
-  created_at: string;
-  completed_at?: string | null;
+export interface ProviderExecutionRequest {
+  provider_id?: string;
+  route_key?: string;
+  action: 'validate_player' | 'topup' | 'deliver_package' | 'check_balance' | 'ping';
+  reference_id?: string;
+  payload: Record<string, any>;
+  is_sandbox?: boolean;
+}
+
+export interface ProviderExecutionResult {
+  success: boolean;
+  provider_id: string;
+  provider_code: string;
+  action: string;
+  reference_id?: string;
+  http_status: number;
+  duration_ms: number;
+  data?: any;
+  error?: string;
+  is_failover?: boolean;
+  original_error?: string;
+}
+
+export interface HealthCheckResult {
+  provider_id: string;
+  provider_code: string;
+  status: ProviderHealthStatus;
+  latency_ms: number;
+  message?: string;
+  checked_at: string;
 }
