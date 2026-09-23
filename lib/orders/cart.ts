@@ -10,7 +10,7 @@ function stablePlayerData(data: PlayerData): string {
 }
 
 export function cartItemKey(item: Pick<CartItem, "productId" | "playerData">): string {
-  return ;
+  return `${item.productId}:${stablePlayerData(item.playerData ?? {})}`;
 }
 
 export function normalizeCartItems(items: (CartItem | Record<string, any>)[]): CartItem[] {
