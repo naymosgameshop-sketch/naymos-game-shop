@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/get-user';
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
     await requireAdmin();
-    const supabase = await createServerClient();
+    const supabase = await createClient();
 
     const { data: products, error } = await supabase
       .from('digital_products')
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await requireAdmin();
-    const supabase = await createServerClient();
+    const supabase = await createClient();
     const body = await req.json();
 
     const {
