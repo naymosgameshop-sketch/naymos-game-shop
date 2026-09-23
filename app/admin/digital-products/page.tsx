@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Smartphone, Plus, Layers, Zap, CheckCircle2, XCircle, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { getActiveDigitalProducts, getDigitalProductCategories } from '@/lib/digital-products/queries';
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = { title: 'จัดการแอปพรีเมียม & สินค้าดิจิทัล | Admin' };
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export default async function AdminDigitalProductsPage() {
   // Also query providers for routing info
   let providers: any[] = [];
   try {
-    const supabase = await createServerClient();
+    const supabase = await createClient();
     const { data } = await supabase.from('providers').select('id, name, code, is_active');
     providers = data || [];
   } catch {
