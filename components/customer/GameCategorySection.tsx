@@ -23,8 +23,8 @@ const SKELETON_COUNT = 12;
 export function GameCategorySection({
   games: initialGames = [],
   categories: initialCategories = [],
-  title = 'รายการทั้งหมด',
-  subtitle = 'เลือกเกมหรือบริการที่ต้องการเติมเงิน ระบบอัตโนมัติ รวดเร็ว ปลอดภัย 100%',
+  title = 'เติมเกม',
+  subtitle = 'เลือกเกมที่คุณต้องการเติม — ระบบอัตโนมัติ รวดเร็ว ปลอดภัย 100%',
 }: GameCategorySectionProps) {
   const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -40,9 +40,6 @@ export function GameCategorySection({
   });
 
   // 2. Active Category Games Query
-  // - If cached: returns data instantly (0ms) without showing Skeleton
-  // - If not cached: isLoading is true -> renders GameCardSkeleton immediately
-  // - If cached but stale: returns cached data immediately, isFetching=true for background sync
   const {
     data: games,
     isLoading,
@@ -55,20 +52,18 @@ export function GameCategorySection({
     gcTime: 20 * 60 * 1000,
   });
 
-  // 3. Controlled Background Prefetching (Low Concurrency, No Supabase Flood)
+  // 3. Controlled Background Prefetching
   useEffect(() => {
     if (!categories || categories.length === 0) return;
     let isCancelled = false;
 
     const runSequentialPrefetch = async () => {
-      // Small initial delay so initial page interactive paint is completely finished
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       for (const cat of categories) {
         if (isCancelled) break;
         const key = catalogKeys.games(cat.id);
 
-        // Prefetch only if not already in cache
         if (!queryClient.getQueryData(key)) {
           try {
             await queryClient.prefetchQuery({
@@ -79,8 +74,6 @@ export function GameCategorySection({
           } catch {
             // Ignore background prefetch errors silently
           }
-
-          // 800ms cooldown between categories to protect Supabase bandwidth
           await new Promise((resolve) => setTimeout(resolve, 800));
         }
       }
@@ -93,7 +86,7 @@ export function GameCategorySection({
     };
   }, [categories, queryClient]);
 
-  // 4. Instant On-Demand Prefetch on Hover / Touch
+  // 4. Instant On-Demand Prefetch on Hover
   const handleCategoryHover = useCallback(
     (categoryId: string) => {
       const key = catalogKeys.games(categoryId);
@@ -108,7 +101,7 @@ export function GameCategorySection({
     [queryClient]
   );
 
-  // 5. Client Search Filter over active category items
+  // 5. Client Search Filter
   const activeGames = games ?? [];
   const filteredGames = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -121,40 +114,84 @@ export function GameCategorySection({
   }, [activeGames, searchQuery]);
 
   return (
-    <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-      {/* Header & Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 sm:mb-8 pb-4 border-b border-sky-100/80">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-100/80 text-sky-700 text-xs font-semibold mb-2 shadow-2xs">
-            <Sparkles className="w-3.5 h-3.5 text-sky-500" />
-            <span>บริการเติมเกมและสินค้าทั้งหมด</span>
+    <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
+      {/* Header Banner - Matching Blue Gradient Style like Digital Products */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-700 p-6 sm:p-10 text-white shadow-xl shadow-sky-500/10">
+        <div className="relative z-10 max-w-2xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold text-sky-100 mb-3 border border-white/20">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Game Top-up Services</span>
             {isFetching && !isLoading && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-sky-600 bg-white/90 px-2 py-0.5 rounded-full ml-1 shadow-2xs">
+              <span className="inline-flex items-center gap-1 text-[10px] text-white bg-sky-500/50 px-2 py-0.5 rounded-full ml-1">
                 <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                อัปเดตข้อมูลเบื้องหลัง
+                อัปเดต
               </span>
             )}
           </div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
             {title}
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">{subtitle}</p>
+          </h1>
+          <p className="mt-2 text-sm sm:text-base text-sky-100/90 leading-relaxed">
+            {subtitle}
+          </p>
+        </div>
+        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+      </div>
+
+      {/* Filter Tabs & Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('all')}
+            onMouseEnter={() => handleCategoryHover('all')}
+            className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all shadow-2xs cursor-pointer ${
+              selectedCategory === 'all'
+                ? 'bg-sky-500 text-white shadow-sm ring-2 ring-sky-300/40'
+                : 'bg-white text-slate-600 border border-sky-100 hover:bg-sky-50 hover:text-sky-600'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5" />
+              <span>ทั้งหมด</span>
+            </span>
+          </button>
+
+          {categories.map((cat) => {
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.id)}
+                onMouseEnter={() => handleCategoryHover(cat.id)}
+                className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all shadow-2xs cursor-pointer ${
+                  isSelected
+                    ? 'bg-sky-500 text-white shadow-sm ring-2 ring-sky-300/40'
+                    : 'bg-white text-slate-600 border border-sky-100 hover:bg-sky-50 hover:text-sky-600'
+                }`}
+              >
+                <span>{cat.name}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Search input */}
-        <div className="relative w-full md:w-72 lg:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        {/* Search Input */}
+        <div className="relative min-w-[240px] sm:w-72">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="ค้นหาชื่อเกมหรือบริการ..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 sm:py-2.5 text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-sky-200/80 bg-white/90 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-400/30 focus:border-sky-400 placeholder:text-slate-400 text-slate-800 transition-all shadow-2xs"
+            className="w-full pl-9 pr-8 py-2 rounded-full border border-sky-100 bg-white text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-sky-400/30 focus:border-sky-500 shadow-2xs"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 p-1"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
             >
               ✕
             </button>
@@ -162,43 +199,7 @@ export function GameCategorySection({
         </div>
       </div>
 
-      {/* Category Filter Tabs with Instant Client State */}
-      <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto pb-3 mb-6 sm:mb-8 scrollbar-none no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-        <button
-          onClick={() => setSelectedCategory('all')}
-          onMouseEnter={() => handleCategoryHover('all')}
-          className={`shrink-0 inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 shadow-2xs cursor-pointer ${
-            selectedCategory === 'all'
-              ? 'bg-sky-600 text-white shadow-sky-500/20 shadow-md scale-[1.02]'
-              : 'bg-white text-slate-600 hover:bg-sky-50/80 hover:text-sky-700 border border-sky-100'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span>ทั้งหมด</span>
-        </button>
-
-        {categories.map((cat) => {
-          const isSelected = selectedCategory === cat.id;
-
-          return (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              onMouseEnter={() => handleCategoryHover(cat.id)}
-              onTouchStart={() => handleCategoryHover(cat.id)}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 shadow-2xs cursor-pointer ${
-                isSelected
-                  ? 'bg-sky-600 text-white shadow-sky-500/20 shadow-md scale-[1.02]'
-                  : 'bg-white text-slate-600 hover:bg-sky-50/80 hover:text-sky-700 border border-sky-100'
-              }`}
-            >
-              <span>{cat.name}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* GameGrid: Skeleton Loading vs Real Cards without Layout Shift */}
+      {/* GameGrid */}
       {isLoading ? (
         <div
           role="status"
@@ -210,10 +211,10 @@ export function GameCategorySection({
           ))}
         </div>
       ) : filteredGames.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 px-4 bg-white/70 backdrop-blur-xs rounded-2xl border border-sky-100 text-center my-4">
-          <Gamepad2 className="w-12 h-12 text-sky-300 mb-3" />
-          <h3 className="text-base sm:text-lg font-bold text-slate-700">ไม่พบรายการที่ค้นหา</h3>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-sm">
+        <div className="rounded-3xl border border-sky-100 bg-white p-12 text-center shadow-xs">
+          <Gamepad2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h3 className="font-bold text-slate-700 text-base">ไม่พบรายการที่ค้นหา</h3>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
             {searchQuery
               ? `ไม่พบผลการค้นหาสำหรับ "${searchQuery}" ในหมวดหมู่นี้`
               : 'ยังไม่มีรายการเกมในหมวดหมู่นี้'}
