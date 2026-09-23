@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/get-user';
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,7 @@ export async function PUT(
 ) {
   try {
     await requireAdmin();
-    const supabase = await createServerClient();
+    const supabase = await createClient();
     const body = await req.json();
 
     const { id } = params;
@@ -60,7 +60,7 @@ export async function DELETE(
 ) {
   try {
     await requireAdmin();
-    const supabase = await createServerClient();
+    const supabase = await createClient();
     const { id } = params;
 
     // Soft toggle or remove
