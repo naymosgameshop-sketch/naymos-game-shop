@@ -19,6 +19,11 @@ import {
   Sliders,
   Send,
   ArrowRightLeft,
+  Gamepad2,
+  Sparkles,
+  Package,
+  Wallet,
+  Bot,
 } from 'lucide-react';
 import { CentralProvider, ProviderHealthStatus } from '@/types/central-provider';
 
@@ -40,6 +45,50 @@ export default function AdminProvidersHubPage() {
   const [sandboxPayload, setSandboxPayload] = useState<string>('{\n  "player_id": "987654321",\n  "server_id": "SEA"\n}');
   const [sandboxResult, setSandboxResult] = useState<any>(null);
   const [sandboxRunning, setSandboxRunning] = useState(false);
+
+  const CATEGORY_META: Record<string, { label: string; icon: any; color: string }> = {
+    GAME_TOPUP: { label: 'ระบบเติมเกม', icon: Gamepad2, color: 'text-sky-400' },
+    PREMIUM_APP: { label: 'แอปพรีเมียม', icon: Sparkles, color: 'text-violet-400' },
+    DIGITAL_PRODUCT: { label: 'สินค้าดิจิทัล', icon: Package, color: 'text-pink-400' },
+    PAYMENT: { label: 'ระบบชำระเงิน', icon: Wallet, color: 'text-emerald-400' },
+    AI: { label: 'AI', icon: Bot, color: 'text-amber-400' },
+    ALL: { label: 'ทั่วไป', icon: Globe, color: 'text-slate-400' },
+  };
+
+  const BUILT_IN_TRIAL_APIS = [
+    {
+      code: 'mock-game-topup',
+      name: 'Mock Game Topup Sandbox',
+      system: 'เติมเกม',
+      description: 'จำลองตรวจสอบ Player ID และส่งของเกม (ยังไม่เชื่อม API จริงของ Garena/RoV/Free Fire)',
+    },
+    {
+      code: 'mock-digital-goods',
+      name: 'Sandbox Premium Apps Provider',
+      system: 'แอปพรีเมียม / สินค้าดิจิทัล',
+      description: 'จำลองการออกโค้ดแอปพรีเมียม เช่น Spotify/Netflix สำหรับทดสอบระบบสั่งซื้อ',
+    },
+    {
+      code: 'local-promptpay',
+      name: 'PromptPay EMVCo Local Engine',
+      system: 'ชำระเงิน',
+      description: 'ใช้งานจริง: สร้าง QR PromptPay ในระบบ (PromptPay ID 0988251064) ไม่เสียค่าธรรมเนียมผู้ให้บริการภายนอก',
+    },
+    {
+      code: 'ai-gateway',
+      name: 'AI Assistant Unified Gateway',
+      system: 'AI (แชทผู้ช่วย)',
+      description: 'ใช้งานจริง: เรียก Gemini / OpenAI / Groq ผ่าน env keys เพื่อระบบแชทช่วยเหลือลูกค้า',
+    },
+  ];
+
+  const categoryOrder = ['GAME_TOPUP', 'PREMIUM_APP', 'DIGITAL_PRODUCT', 'PAYMENT', 'AI', 'ALL'];
+  const categoryInventory = categoryOrder
+    .map((category) => ({
+      category,
+      items: providers.filter((p) => (p.category || p.type || 'ALL') === category),
+    }))
+    .filter((g) => g.items.length > 0);
 
   useEffect(() => {
     fetchProviders();
@@ -218,6 +267,70 @@ export default function AdminProvidersHubPage() {
             <Plus className="w-4 h-4" /> เพิ่ม Provider ใหม่
           </button>
         </div>
+      </div>
+
+      {/* API Inventory: ทดลอง & ใช้งานจริง แยกตามหมวดระบบ */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-400/30 flex items-center justify-center text-sky-400">
+            <Globe className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-black text-white">API ที่ใช้งานอยู่ &amp; API ทดลอง</h2>
+            <p className="text-[11px] text-slate-400">
+              แยกตามหมวดระบบ — <span className="text-amber-400 font-semibold">Sandbox = ทดลอง</span> / <span className="text-emerald-400 font-semibold">Production = ใช้งานจริง</span>
+            </p>
+          </div>
+        </div>
+
+        {providers.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {BUILT_IN_TRIAL_APIS.map((api) => (
+              <div key={api.code} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-white">{api.name}</span>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/20 text-amber-400 border border-amber-400/30">ทดลอง (Sandbox)</span>
+                </div>
+                <div className="text-[11px] text-slate-400 mb-1">{api.description}</div>
+                <div className="text-[10px] text-slate-500">ระบบ: {api.system} · <span className="font-mono">{api.code}</span></div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {categoryInventory.map(({ category, items }) => {
+              const meta = CATEGORY_META[category] || CATEGORY_META.ALL;
+              const Icon = meta.icon;
+              return (
+                <div key={category} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon className={`w-4 h-4 ${meta.color}`} />
+                    <span className="text-xs font-black text-white">{meta.label}</span>
+                    <span className="ml-auto text-[10px] text-slate-500">{items.length} API</span>
+                  </div>
+                  <div className="space-y-2">
+                    {items.map((p: CentralProvider) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 bg-slate-900/70 rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-bold text-slate-200 truncate">{p.name}</div>
+                          <div className="text-[10px] font-mono text-slate-500 truncate">{p.code}</div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold ${p.is_test_mode ? 'bg-amber-500/20 text-amber-400 border border-amber-400/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-400/30'}`}>
+                            {p.is_test_mode ? 'ทดลอง' : 'ใช้งานจริง'}
+                          </span>
+                          <span className={`text-[9px] font-semibold ${p.health_status === 'HEALTHY' ? 'text-emerald-400' : p.health_status === 'DOWN' ? 'text-rose-400' : 'text-slate-500'}`}>
+                            {p.health_status === 'HEALTHY' ? 'พร้อมใช้' : p.health_status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Metrics Row */}
@@ -410,6 +523,14 @@ export default function AdminProvidersHubPage() {
                     </tr>
                   );
                 })}
+                {providers.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-10 px-4 text-center">
+                      <p className="text-xs font-semibold text-slate-400">ยังไม่มีข้อมูล API Provider ในฐานข้อมูล</p>
+                      <p className="text-[11px] text-slate-500 mt-1">รัน migration 034 บน Supabase SQL Editor แล้วระบบจะแสดงรายการอัตโนมัติ</p>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -604,7 +725,7 @@ export default function AdminProvidersHubPage() {
                   required
                   value={editingProvider?.name || ''}
                   onChange={(e) => setEditingProvider({ ...editingProvider, name: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
                   placeholder="เช่น Garena Topup Gateway"
                 />
               </div>
@@ -617,7 +738,7 @@ export default function AdminProvidersHubPage() {
                   disabled={!!editingProvider?.id}
                   value={editingProvider?.code || ''}
                   onChange={(e) => setEditingProvider({ ...editingProvider, code: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white disabled:opacity-50"
+                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition disabled:opacity-50 disabled:placeholder:text-slate-600"
                   placeholder="เช่น garena-sea"
                 />
               </div>
@@ -628,7 +749,7 @@ export default function AdminProvidersHubPage() {
                   <select
                     value={editingProvider?.category || 'GAME_TOPUP'}
                     onChange={(e: any) => setEditingProvider({ ...editingProvider, category: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
                   >
                     <option value="GAME_TOPUP">เติมเกม</option>
                     <option value="PREMIUM_APP">แอปพรีเมียม</option>
@@ -642,7 +763,7 @@ export default function AdminProvidersHubPage() {
                   <select
                     value={editingProvider?.environment || 'sandbox'}
                     onChange={(e: any) => setEditingProvider({ ...editingProvider, environment: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
                   >
                     <option value="sandbox">Sandbox</option>
                     <option value="production">Production</option>
@@ -656,7 +777,7 @@ export default function AdminProvidersHubPage() {
                   type="text"
                   value={editingProvider?.api_base_url || ''}
                   onChange={(e) => setEditingProvider({ ...editingProvider, api_base_url: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
                   placeholder="https://api.provider.com/v1"
                 />
               </div>
@@ -667,7 +788,7 @@ export default function AdminProvidersHubPage() {
                   type="password"
                   value={editingProvider?.api_key || ''}
                   onChange={(e) => setEditingProvider({ ...editingProvider, api_key: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
                   placeholder="ใส่คีย์ใหม่เมื่อต้องการเปลี่ยน"
                 />
               </div>
