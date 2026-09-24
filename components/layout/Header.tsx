@@ -5,6 +5,7 @@ import { User, ShoppingCart } from 'lucide-react';
 import { getProfile } from '@/lib/auth/get-user';
 import { createClient } from '@/lib/supabase/server';
 import { HeaderNav } from './HeaderNav';
+import { HeaderMusicButton } from '@/components/music/HeaderMusicButton';
 
 const getActiveOrderCount = cache(async (userId: string): Promise<number> => {
   try {
@@ -61,6 +62,7 @@ export async function Header() {
 
           {/* User actions */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            <HeaderMusicButton />
             {profile ? (
               <Link
                 href="/account"

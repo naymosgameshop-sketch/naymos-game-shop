@@ -25,6 +25,7 @@ import {
   Server,
   DollarSign,
   Smartphone,
+  Music,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { href: '/admin/categories', label: 'หมวดหมู่สินค้า', icon: Layers },
   { href: '/admin/products', label: 'จัดการสินค้า/แพ็กเกจเกม', icon: Package },
   { href: '/admin/digital-products', label: 'จัดการแอปพรีเมียม / สินค้าดิจิทัล', icon: Smartphone },
+  { href: '/admin/music', label: 'จัดการเพลง BGM', icon: Music },
   { href: '/admin/customers', label: 'จัดการลูกค้า', icon: Users },
   { href: '/admin/coupons', label: 'คูปองส่วนลด', icon: Tag },
   { href: '/admin/promotions', label: 'โปรโมชั่น', icon: Gift },

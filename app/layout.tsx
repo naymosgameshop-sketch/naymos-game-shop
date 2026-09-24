@@ -3,6 +3,8 @@ import { Prompt } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'sonner';
 import { QueryProvider } from '@/components/providers/QueryProvider';
+import { MusicPlayerProvider } from '@/components/music/MusicPlayerContext';
+import { GlobalBGMPlayer } from '@/components/music/GlobalBGMPlayer';
 
 const prompt = Prompt({
   variable: '--font-prompt',
@@ -32,7 +34,10 @@ export default function RootLayout({
     <html lang="th" className={`${prompt.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans bg-[#f0f9ff] text-slate-800" suppressHydrationWarning>
         <QueryProvider>
-          {children}
+          <MusicPlayerProvider>
+            <GlobalBGMPlayer />
+            {children}
+          </MusicPlayerProvider>
         </QueryProvider>
         <Toaster theme="light" position="top-center" richColors />
       </body>
