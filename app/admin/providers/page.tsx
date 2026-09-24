@@ -53,10 +53,10 @@ const BUILT_IN_TRIAL_APIS = [
     health_status: 'HEALTHY',
     system: 'ระบบเติมเกมอัตโนมัติ',
     description: 'จำลองการตรวจสอบ Player ID และส่งไอเทมเกม (Free Fire, ROV, MLBB ฯลฯ) ตอบสนองทันทีโดยไม่ต้องต่อ Gateway ค่ายเกมจริง',
-    samplePayload: '{
+    samplePayload: `{
   "player_id": "987654321",
   "server_id": "SEA"
-}',
+}`,
   },
   {
     id: 'mock-digital-goods-fallback',
@@ -70,10 +70,10 @@ const BUILT_IN_TRIAL_APIS = [
     health_status: 'HEALTHY',
     system: 'ระบบแอปพรีเมียม & สินค้าดิจิทัล',
     description: 'จำลองการส่งมอบคีย์และบัญชีอัตโนมัติ เช่น Spotify, Netflix, YouTube Premium',
-    samplePayload: '{
+    samplePayload: `{
   "package_id": "spotify-1m",
   "customer_email": "demo@naymos.com"
-}',
+}`,
   },
   {
     id: 'finshop-fallback',
@@ -87,10 +87,10 @@ const BUILT_IN_TRIAL_APIS = [
     health_status: 'UNKNOWN',
     system: 'ระบบแอปพรีเมียม & สินค้าดิจิทัล FinShop',
     description: 'บริการดึงสินค้า ส่งมอบคีย์ และแพ็กเกจแอปพรีเมียม (iQIYI, WeTV, VIU, Canva, HBO MAX ฯลฯ) อัตโนมัติ รองรับ Sync & Test API (ID: 66)',
-    samplePayload: '{
+    samplePayload: `{
   "product_id": 66,
   "customer": "naymos_user"
-}',
+}`,
   },
   {
     id: 'byshop-fallback',
@@ -104,10 +104,10 @@ const BUILT_IN_TRIAL_APIS = [
     health_status: 'HEALTHY',
     system: 'เกตเวย์เติมเกมอัตโนมัติ ByShop',
     description: 'เชื่อมต่อระบบเติมเกมอัตโนมัติความเร็วสูง ตรวจสอบชื่อผู้เล่น (Player ID) และตัดยอดส่งไอเทมเกมเข้าไอดีทันที',
-    samplePayload: '{
+    samplePayload: `{
   "player_id": "11223344",
   "game_id": "freefire"
-}',
+}`,
   },
   {
     id: 'local-promptpay-fallback',
@@ -121,10 +121,10 @@ const BUILT_IN_TRIAL_APIS = [
     health_status: 'HEALTHY',
     system: 'ระบบชำระเงิน & QR พร้อมเพย์',
     description: 'สร้าง QR Code พร้อมเพย์มาตรฐาน EMVCo เบอร์ 0988251064 ภายในระบบโดยตรง ไม่เสียค่าธรรมเนียมภายนอก',
-    samplePayload: '{
+    samplePayload: `{
   "amount": 100,
   "order_number": "ORD-TEST-001"
-}',
+}`,
   },
   {
     id: 'ai-gateway-fallback',
@@ -138,9 +138,9 @@ const BUILT_IN_TRIAL_APIS = [
     health_status: 'HEALTHY',
     system: 'ระบบผู้ช่วย AI & แชทบอท',
     description: 'เชื่อมต่อ Gemini 1.5 Flash / OpenAI / Groq ให้บริการบอทตอบคำถามลูกค้า',
-    samplePayload: '{
+    samplePayload: `{
   "message": "สอบถามโปรโมชั่นเติมเกมวันนี้หน่อยครับ"
-}',
+}`,
   },
 ];
 
@@ -595,6 +595,14 @@ export default function AdminProvidersHubPage() {
                       </span>
                     </div>
 
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                      <span className="text-slate-400 font-medium">ความปลอดภัยคีย์:</span>
+                      <span className="font-mono text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1 font-semibold">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>•••••••• (Server-Side Only)</span>
+                      </span>
+                    </div>
+
                     {api.code === 'finshop' && (
                       <div className="flex items-center justify-between gap-2 text-[11px] pt-1 border-t border-slate-800">
                         <span className="text-slate-400">สินค้าทดสอบ:</span>
@@ -604,16 +612,16 @@ export default function AdminProvidersHubPage() {
                   </div>
                 </div>
 
-                {/* Card Action Footer */}
-                <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    {/* Real-time Edit Button */}
+                {/* Card Action Footer - Mobile & Tablet Optimized */}
+                <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    {/* Real-time Edit Button (Touch friendly) */}
                     <button
                       onClick={() => openEditModal(api)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-200 border border-slate-700 hover:border-sky-500 transition-all flex items-center gap-1.5 shadow-sm"
+                      className="min-h-[38px] px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-200 border border-slate-700 hover:border-sky-500 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
                       title="แก้ไขข้อมูล API แบบเรียลไทม์"
                     >
-                      <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                      <Sliders className="w-4 h-4 text-sky-400" />
                       <span>แก้ไข API</span>
                     </button>
 
@@ -621,29 +629,30 @@ export default function AdminProvidersHubPage() {
                     <button
                       onClick={() => handleDeleteProvider(api)}
                       disabled={deletingId === api.id}
-                      className="p-1.5 rounded-xl text-rose-400 hover:text-white hover:bg-rose-600/30 border border-rose-500/40 transition text-xs flex items-center gap-1 font-semibold"
+                      className="min-h-[38px] min-w-[38px] p-2 rounded-xl text-rose-400 hover:text-white hover:bg-rose-600/30 border border-rose-500/40 transition text-xs flex items-center justify-center gap-1 font-semibold active:scale-95 cursor-pointer disabled:opacity-40"
                       title="ลบ API ออกจากระบบ"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
+                      <span className="sm:hidden text-xs">ลบ</span>
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 ml-auto sm:ml-0">
                     {api.code === 'finshop' ? (
                       <button
                         onClick={() => setActiveTab('finshop')}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/50 transition flex items-center gap-1.5 shadow-sm"
+                        className="min-h-[38px] px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/50 transition flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
                       >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        จัดการ FinShop
+                        <Sparkles className="w-4 h-4" />
+                        <span>จัดการ FinShop</span>
                       </button>
                     ) : (
                       <button
                         onClick={() => openLiveSandbox(api.id, api.category)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-600/30 text-sky-300 hover:bg-sky-600 hover:text-white border border-sky-400/50 transition flex items-center gap-1.5 shadow-sm"
+                        className="min-h-[38px] px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-sky-600/30 text-sky-300 hover:bg-sky-600 hover:text-white border border-sky-400/50 transition flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
                       >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        Live Sandbox
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Live Sandbox</span>
                       </button>
                     )}
                   </div>
@@ -1109,60 +1118,85 @@ export default function AdminProvidersHubPage() {
         </div>
       )}
 
-      {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-white">
-              {editingProvider?.id ? 'แก้ไข Provider' : 'เพิ่ม Provider ใหม่'}
-            </h3>
-            <form onSubmit={handleSaveProvider} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-200 font-bold block mb-1">ชื่อผู้ให้บริการ</label>
-                <input
-                  type="text"
-                  required
-                  value={editingProvider?.name || ''}
-                  onChange={(e) => setEditingProvider({ ...editingProvider, name: e.target.value })}
-                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
-                  placeholder="เช่น Garena Topup Gateway"
-                />
+      
+      {/* Unified Real-Time API Edit & Add Modal (Mobile & Tablet Optimized) */}
+      {editingApi && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700/90 rounded-2xl sm:rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl relative my-auto max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800 shrink-0">
+              <div className="pr-4">
+                <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                  <Sliders className="w-5 h-5 text-sky-400 shrink-0" />
+                  <span>{editingApi.isNew ? 'เพิ่ม API Provider ใหม่' : 'แก้ไข API แบบเรียลไทม์'}</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                  {editingApi.isNew ? 'เพิ่มผู้ให้บริการใหม่เข้าสู่ระบบกลาง' : `${editingApi.name} (${editingApi.code})`}
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setEditingApi(null)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div>
-                <label className="text-slate-200 font-bold block mb-1">รหัสอ้างอิง (Unique Code)</label>
-                <input
-                  type="text"
-                  required
-                  disabled={!!editingProvider?.id}
-                  value={editingProvider?.code || ''}
-                  onChange={(e) => setEditingProvider({ ...editingProvider, code: e.target.value })}
-                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition disabled:opacity-50"
-                  placeholder="เช่น garena-sea"
-                />
+            {editSuccessMsg && (
+              <div className="mt-3 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 shrink-0">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{editSuccessMsg}</span>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-2">
+            <form onSubmit={handleSaveApiEdit} className="space-y-3.5 overflow-y-auto pr-1 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-200 font-bold block mb-1">หมวดหมู่</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">ชื่อ Provider / API</label>
+                  <input
+                    type="text"
+                    required
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-xl text-white text-xs sm:text-sm focus:outline-none transition"
+                    placeholder="เช่น Garena SEA Gateway"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">รหัส Code (Unique)</label>
+                  <input
+                    type="text"
+                    required
+                    disabled={!editingApi.isNew && !!editingApi.id && !editingApi.id.includes('fallback')}
+                    value={editFormData.code}
+                    onChange={(e) => setEditFormData({ ...editFormData, code: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-xl text-sky-400 font-mono text-xs sm:text-sm focus:outline-none transition disabled:opacity-50"
+                    placeholder="เช่น garena-sea"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">หมวดหมู่ระบบ</label>
                   <select
-                    value={editingProvider?.category || 'GAME_TOPUP'}
-                    onChange={(e: any) => setEditingProvider({ ...editingProvider, category: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-white outline-none focus:border-sky-400"
+                    value={editFormData.category}
+                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-xl text-white text-xs sm:text-sm focus:outline-none transition cursor-pointer"
                   >
-                    <option value="GAME_TOPUP">ระบบเติมเกม</option>
-                    <option value="PREMIUM_APP">แอปพรีเมียม</option>
-                    <option value="DIGITAL_PRODUCT">สินค้าดิจิทัล</option>
-                    <option value="PAYMENT">ระบบชำระเงิน</option>
-                    <option value="AI">ระบบ AI</option>
+                    <option value="GAME_TOPUP">ระบบเติมเกม (GAME_TOPUP)</option>
+                    <option value="PREMIUM_APP">แอปพรีเมียม (PREMIUM_APP)</option>
+                    <option value="DIGITAL_PRODUCT">สินค้าดิจิทัล (DIGITAL_PRODUCT)</option>
+                    <option value="PAYMENT">ระบบชำระเงิน (PAYMENT)</option>
+                    <option value="AI">ระบบ AI ผู้ช่วย (AI)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-slate-200 font-bold block mb-1">สภาพแวดล้อม</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">สภาพแวดล้อม (Environment)</label>
                   <select
-                    value={editingProvider?.environment || 'sandbox'}
-                    onChange={(e: any) => setEditingProvider({ ...editingProvider, environment: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-white outline-none focus:border-sky-400"
+                    value={editFormData.environment}
+                    onChange={(e) => setEditFormData({ ...editFormData, environment: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-xl text-white text-xs sm:text-sm focus:outline-none transition cursor-pointer"
                   >
                     <option value="sandbox">Sandbox (ทดลอง)</option>
                     <option value="production">Production (ใช้งานจริง)</option>
@@ -1171,37 +1205,84 @@ export default function AdminProvidersHubPage() {
               </div>
 
               <div>
-                <label className="text-slate-200 font-bold block mb-1">API Base URL / Endpoint</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Endpoint (API Base URL)</label>
                 <input
                   type="text"
-                  value={editingProvider?.api_base_url || ''}
-                  onChange={(e) => setEditingProvider({ ...editingProvider, api_base_url: e.target.value })}
-                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
+                  required
+                  value={editFormData.api_base_url}
+                  onChange={(e) => setEditFormData({ ...editFormData, api_base_url: e.target.value })}
                   placeholder="https://api.provider.com/v1"
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-xl text-white font-mono text-xs sm:text-sm focus:outline-none transition"
                 />
               </div>
 
-              <div>
-                <label className="text-slate-200 font-bold block mb-1">API Key / Secret (Masked)</label>
+              {/* Secure API Key / Secret fields */}
+              <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
+                  <ShieldCheck className="w-4 h-4 shrink-0" />
+                  <span>ความปลอดภัย Server-Side Secret</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  API Key และ Secret จะถูกจัดเก็บและเรียกใช้งานผ่านฝั่ง Server เท่านั้น โดยระบบจะไม่ส่ง Key กลับมายัง Browser เด็ดขาดเพื่อความปลอดภัยสูงสุด (หากไม่ต้องการเปลี่ยน ให้เว้นว่างไว้)
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      API Key
+                    </label>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={editFormData.api_key}
+                      onChange={(e) => setEditFormData({ ...editFormData, api_key: e.target.value })}
+                      placeholder="••••••••••••••••"
+                      className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 focus:border-sky-400 rounded-xl text-white font-mono text-xs sm:text-sm focus:outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      API Secret / Token
+                    </label>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={editFormData.api_secret}
+                      onChange={(e) => setEditFormData({ ...editFormData, api_secret: e.target.value })}
+                      placeholder="••••••••••••••••"
+                      className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 focus:border-sky-400 rounded-xl text-white font-mono text-xs sm:text-sm focus:outline-none transition"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div>
+                  <div className="text-xs font-bold text-white">สถานะเปิดรับออเดอร์ (Is Active)</div>
+                  <div className="text-[11px] text-slate-400">เปิดหรือปิดการทำงานของ API นี้ในระบบกลาง</div>
+                </div>
                 <input
-                  type="password"
-                  value={editingProvider?.api_key || ''}
-                  onChange={(e) => setEditingProvider({ ...editingProvider, api_key: e.target.value })}
-                  className="w-full bg-slate-800/80 border border-slate-600 focus:border-sky-400 rounded-xl px-3 py-2.5 text-white placeholder:text-slate-500 outline-none transition"
-                  placeholder="ใส่คีย์ใหม่เมื่อต้องการเปลี่ยน"
+                  type="checkbox"
+                  checked={editFormData.is_active}
+                  onChange={(e) => setEditFormData({ ...editFormData, is_active: e.target.checked })}
+                  className="w-5 h-5 rounded border-slate-700 text-sky-500 focus:ring-0 cursor-pointer accent-sky-500"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+                  onClick={() => setEditingApi(null)}
+                  className="min-h-[42px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-semibold transition active:scale-95 cursor-pointer"
                 >
                   ยกเลิก
                 </button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-sky-500 font-bold text-white hover:bg-sky-400 shadow-md">
-                  บันทึก
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="min-h-[42px] px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-sky-600/30 transition flex items-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
+                >
+                  {savingEdit ? 'กำลังบันทึก...' : 'บันทึกข้อมูลเรียลไทม์'}
                 </button>
               </div>
             </form>
@@ -1211,6 +1292,7 @@ export default function AdminProvidersHubPage() {
     </div>
   );
 }
+
 
 function FinShopManagerSection({
   providers,
@@ -1589,159 +1671,5 @@ function FinShopManagerSection({
         )}
       </div>
     </div>
-
-      {/* Real-Time API Edit Modal */}
-      {editingApi && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
-              <div>
-                <h3 className="text-lg font-black text-white flex items-center gap-2">
-                  <Sliders className="w-5 h-5 text-sky-400" />
-                  แก้ไข API แบบเรียลไทม์
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  แก้ไขข้อมูล API ของ {editingApi.name} ({editingApi.code}) ข้อมูลจะบันทึกและมีผลทันที
-                </p>
-              </div>
-              <button
-                onClick={() => setEditingApi(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
-              >
-                ✕
-              </button>
-            </div>
-
-            {editSuccessMsg && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
-                {editSuccessMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleSaveApiEdit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">ชื่อ Provider / API</label>
-                  <input
-                    type="text"
-                    required
-                    value={editFormData.name}
-                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white text-sm focus:outline-none transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">รหัส Code (ห้ามซ้ำ)</label>
-                  <input
-                    type="text"
-                    required
-                    value={editFormData.code}
-                    onChange={(e) => setEditFormData({ ...editFormData, code: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-sky-400 font-mono text-sm focus:outline-none transition"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">หมวดหมู่ระบบ</label>
-                  <select
-                    value={editFormData.category}
-                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white text-sm focus:outline-none transition"
-                  >
-                    <option value="GAME_TOPUP">ระบบเติมเกม (GAME_TOPUP)</option>
-                    <option value="PREMIUM_APP">แอปพรีเมียม (PREMIUM_APP)</option>
-                    <option value="DIGITAL_PRODUCT">สินค้าดิจิทัล (DIGITAL_PRODUCT)</option>
-                    <option value="PAYMENT">ระบบชำระเงิน (PAYMENT)</option>
-                    <option value="AI">ระบบ AI ผู้ช่วย (AI)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">โหมดระบบ (Environment)</label>
-                  <select
-                    value={editFormData.environment}
-                    onChange={(e) => setEditFormData({ ...editFormData, environment: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white text-sm focus:outline-none transition"
-                  >
-                    <option value="sandbox">Sandbox (ทดลอง)</option>
-                    <option value="production">Production (ใช้งานจริง)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1.5">Endpoint (API Base URL)</label>
-                <input
-                  type="text"
-                  required
-                  value={editFormData.api_base_url}
-                  onChange={(e) => setEditFormData({ ...editFormData, api_base_url: e.target.value })}
-                  placeholder="https://api.provider.com/v1"
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white font-mono text-sm focus:outline-none transition"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    API Key <span className="text-slate-500 font-normal">(เว้นว่างถ้าไม่ต้องการเปลี่ยน)</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={editFormData.api_key}
-                    onChange={(e) => setEditFormData({ ...editFormData, api_key: e.target.value })}
-                    placeholder="••••••••••••"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white font-mono text-sm focus:outline-none transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    API Secret / Token <span className="text-slate-500 font-normal">(เว้นว่างถ้าไม่เปลี่ยน)</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={editFormData.api_secret}
-                    onChange={(e) => setEditFormData({ ...editFormData, api_secret: e.target.value })}
-                    placeholder="••••••••••••"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white font-mono text-sm focus:outline-none transition"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800">
-                <div>
-                  <div className="text-xs font-bold text-white">สถานะเปิดรับออเดอร์ (Is Active)</div>
-                  <div className="text-[11px] text-slate-400">เปิดหรือปิดการทำงานของ API นี้ในระบบกลาง</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={editFormData.is_active}
-                  onChange={(e) => setEditFormData({ ...editFormData, is_active: e.target.checked })}
-                  className="w-5 h-5 rounded border-slate-700 text-sky-500 focus:ring-0 cursor-pointer accent-sky-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setEditingApi(null)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingEdit}
-                  className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-bold shadow-lg shadow-sky-600/30 transition flex items-center gap-2"
-                >
-                  {savingEdit ? 'กำลังบันทึก...' : 'บันทึกข้อมูลเรียลไทม์'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
   );
 }

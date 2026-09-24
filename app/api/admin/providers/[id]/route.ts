@@ -57,15 +57,15 @@ export async function PUT(
     if (body.timeout_ms !== undefined) updates.timeout_ms = Number(body.timeout_ms);
     if (body.max_retries !== undefined) updates.max_retries = Number(body.max_retries);
 
-    if (body.api_key !== undefined && body.api_key !== null) {
-      updates.api_key = body.api_key;
-      updates.credentials_preview = maskSecretPreview(body.api_key);
+    if (typeof body.api_key === 'string' && body.api_key.trim() !== '') {
+      updates.api_key = body.api_key.trim();
+      updates.credentials_preview = maskSecretPreview(body.api_key.trim());
     }
 
-    if (body.api_secret !== undefined && body.api_secret !== null) {
-      updates.api_secret = body.api_secret;
+    if (typeof body.api_secret === 'string' && body.api_secret.trim() !== '') {
+      updates.api_secret = body.api_secret.trim();
       if (!updates.credentials_preview) {
-        updates.credentials_preview = maskSecretPreview(body.api_secret);
+        updates.credentials_preview = maskSecretPreview(body.api_secret.trim());
       }
     }
 
@@ -80,7 +80,15 @@ export async function PUT(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, provider: data });
+    // Always mask credentials before returning to client/browser
+    const safeProvider = data ? {
+      ...data,
+      api_key: data.api_key ? maskSecretPreview(data.api_key) : null,
+      api_secret: data.api_secret ? maskSecretPreview(data.api_secret) : null,
+      has_credentials: !!(data.api_key || data.api_secret),
+    } : null;
+
+    return NextResponse.json({ success: true, provider: safeProvider });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
