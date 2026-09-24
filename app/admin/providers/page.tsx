@@ -49,10 +49,14 @@ const BUILT_IN_TRIAL_APIS = [
     api_base_url: 'https://mock.naymos.local/v1/topup',
     environment: 'sandbox',
     is_test_mode: true,
+    is_active: true,
     health_status: 'HEALTHY',
     system: 'ระบบเติมเกมอัตโนมัติ',
     description: 'จำลองการตรวจสอบ Player ID และส่งไอเทมเกม (Free Fire, ROV, MLBB ฯลฯ) ตอบสนองทันทีโดยไม่ต้องต่อ Gateway ค่ายเกมจริง',
-    samplePayload: '{\n  "player_id": "987654321",\n  "server_id": "SEA"\n}',
+    samplePayload: '{
+  "player_id": "987654321",
+  "server_id": "SEA"
+}',
   },
   {
     id: 'mock-digital-goods-fallback',
@@ -62,10 +66,48 @@ const BUILT_IN_TRIAL_APIS = [
     api_base_url: 'https://mock.naymos.local/v1/digital',
     environment: 'sandbox',
     is_test_mode: true,
+    is_active: true,
     health_status: 'HEALTHY',
     system: 'ระบบแอปพรีเมียม & สินค้าดิจิทัล',
     description: 'จำลองการส่งมอบคีย์และบัญชีอัตโนมัติ เช่น Spotify, Netflix, YouTube Premium',
-    samplePayload: '{\n  "package_id": "spotify-1m",\n  "customer_email": "demo@naymos.com"\n}',
+    samplePayload: '{
+  "package_id": "spotify-1m",
+  "customer_email": "demo@naymos.com"
+}',
+  },
+  {
+    id: 'finshop-fallback',
+    code: 'finshop',
+    name: 'FinShop API',
+    category: 'DIGITAL_PRODUCT',
+    api_base_url: 'https://finshop.me/api/v1',
+    environment: 'production',
+    is_test_mode: false,
+    is_active: true,
+    health_status: 'UNKNOWN',
+    system: 'ระบบแอปพรีเมียม & สินค้าดิจิทัล FinShop',
+    description: 'บริการดึงสินค้า ส่งมอบคีย์ และแพ็กเกจแอปพรีเมียม (iQIYI, WeTV, VIU, Canva, HBO MAX ฯลฯ) อัตโนมัติ รองรับ Sync & Test API (ID: 66)',
+    samplePayload: '{
+  "product_id": 66,
+  "customer": "naymos_user"
+}',
+  },
+  {
+    id: 'byshop-fallback',
+    code: 'byshop',
+    name: 'ByShop Gateway API',
+    category: 'GAME_TOPUP',
+    api_base_url: 'https://byshop.me/api/v1',
+    environment: 'production',
+    is_test_mode: false,
+    is_active: true,
+    health_status: 'HEALTHY',
+    system: 'เกตเวย์เติมเกมอัตโนมัติ ByShop',
+    description: 'เชื่อมต่อระบบเติมเกมอัตโนมัติความเร็วสูง ตรวจสอบชื่อผู้เล่น (Player ID) และตัดยอดส่งไอเทมเกมเข้าไอดีทันที',
+    samplePayload: '{
+  "player_id": "11223344",
+  "game_id": "freefire"
+}',
   },
   {
     id: 'local-promptpay-fallback',
@@ -75,10 +117,14 @@ const BUILT_IN_TRIAL_APIS = [
     api_base_url: 'internal://payments/promptpay',
     environment: 'production',
     is_test_mode: false,
+    is_active: true,
     health_status: 'HEALTHY',
     system: 'ระบบชำระเงิน & QR พร้อมเพย์',
     description: 'สร้าง QR Code พร้อมเพย์มาตรฐาน EMVCo เบอร์ 0988251064 ภายในระบบโดยตรง ไม่เสียค่าธรรมเนียมภายนอก',
-    samplePayload: '{\n  "amount": 100,\n  "order_number": "ORD-TEST-001"\n}',
+    samplePayload: '{
+  "amount": 100,
+  "order_number": "ORD-TEST-001"
+}',
   },
   {
     id: 'ai-gateway-fallback',
@@ -88,10 +134,13 @@ const BUILT_IN_TRIAL_APIS = [
     api_base_url: 'https://generativelanguage.googleapis.com',
     environment: 'production',
     is_test_mode: false,
+    is_active: true,
     health_status: 'HEALTHY',
     system: 'ระบบผู้ช่วย AI & แชทบอท',
     description: 'เชื่อมต่อ Gemini 1.5 Flash / OpenAI / Groq ให้บริการบอทตอบคำถามลูกค้า',
-    samplePayload: '{\n  "message": "สอบถามโปรโมชั่นเติมเกมวันนี้หน่อยครับ"\n}',
+    samplePayload: '{
+  "message": "สอบถามโปรโมชั่นเติมเกมวันนี้หน่อยครับ"
+}',
   },
 ];
 
@@ -103,6 +152,85 @@ export default function AdminProvidersHubPage() {
   const [loading, setLoading] = useState(true);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Edit API Modal State
+  const [editingApi, setEditingApi] = useState<any | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    code: '',
+    category: 'GAME_TOPUP',
+    api_base_url: '',
+    api_key: '',
+    api_secret: '',
+    environment: 'sandbox',
+    is_active: true,
+    priority: 1,
+    timeout_ms: 10000,
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
+
+  const openEditModal = (api: any) => {
+    setEditingApi(api);
+    setEditSuccessMsg(null);
+    setEditFormData({
+      name: api.name || '',
+      code: api.code || '',
+      category: api.category || api.type || 'GAME_TOPUP',
+      api_base_url: api.api_base_url || '',
+      api_key: '', // Do not prefill secret for security
+      api_secret: '',
+      environment: api.environment || (api.is_test_mode ? 'sandbox' : 'production'),
+      is_active: api.is_active !== undefined ? api.is_active : true,
+      priority: api.priority || 1,
+      timeout_ms: api.timeout_ms || 10000,
+    });
+  };
+
+  const handleSaveApiEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingApi) return;
+    setSavingEdit(true);
+    setEditSuccessMsg(null);
+
+    try {
+      const isDbRecord = editingApi.id && !editingApi.id.includes('fallback');
+      let res;
+      if (isDbRecord) {
+        res = await fetch(`/api/admin/providers/${editingApi.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editFormData),
+        });
+      } else {
+        // If it's a fallback item, insert into DB via POST
+        res = await fetch('/api/admin/providers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...editFormData,
+            type: editFormData.category,
+            is_test_mode: editFormData.environment === 'sandbox',
+          }),
+        });
+      }
+
+      const data = await res.json();
+      if (res.ok) {
+        setEditSuccessMsg('บันทึกการแก้ไข API เรียบร้อยแล้ว (อัปเดตเรียลไทม์)');
+        await fetchProviders();
+        setTimeout(() => {
+          setEditingApi(null);
+        }, 1200);
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการบันทึก');
+      }
+    } catch (err: any) {
+      alert(err.message || 'เกิดข้อผิดพลาด');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -289,9 +417,18 @@ export default function AdminProvidersHubPage() {
     }
   }
 
-  // Determine active dataset: Use DB providers if any; fallback only when empty & not loading
+  // Unified API List: Merge DB providers with built-in templates so every required API is always visible
   const hasDbProviders = providers.length > 0;
-  const displayList = hasDbProviders ? providers : BUILT_IN_TRIAL_APIS;
+  const displayList = useMemo(() => {
+    const list = [...providers];
+    const existingCodes = new Set(providers.map((p) => p.code));
+    for (const item of BUILT_IN_TRIAL_APIS) {
+      if (!existingCodes.has(item.code)) {
+        list.push(item as any);
+      }
+    }
+    return list;
+  }, [providers]);
 
   // Filtered providers
   const filteredList = useMemo(() => {
@@ -389,90 +526,126 @@ export default function AdminProvidersHubPage() {
         </div>
 
         {/* Detailed Grid of APIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {displayList.map((api: any) => {
             const cat = api.category || api.type || 'ALL';
             const meta = CATEGORY_META[cat] || CATEGORY_META.ALL;
             const Icon = meta.icon;
             const isTest = api.is_test_mode || api.environment === 'sandbox';
+            const isActive = api.is_active !== false;
 
             return (
               <div
                 key={api.id || api.code}
-                className="bg-slate-800/70 border border-slate-700 hover:border-slate-600 rounded-xl p-4 transition shadow-md flex flex-col justify-between"
+                className="bg-slate-900 border border-slate-700/90 hover:border-slate-500 rounded-2xl p-5 transition-all shadow-xl flex flex-col justify-between group hover:shadow-2xl"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-700">
-                        <Icon className={`w-4 h-4 ${meta.color}`} />
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 shadow-inner">
+                        <Icon className={`w-5 h-5 ${meta.color}`} />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-white leading-tight">{api.name}</h3>
-                        <div className="text-[11px] font-mono text-sky-400">{api.code}</div>
+                        <h3 className="text-base font-extrabold text-white leading-snug group-hover:text-sky-300 transition-colors">
+                          {api.name}
+                        </h3>
+                        <div className="text-xs font-mono text-sky-400 font-semibold">{api.code}</div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <span
-                        className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border shadow-sm ${
                           isTest
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
-                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
                         }`}
                       >
-                        {isTest ? '⚡ Sandbox (ทดลอง)' : '🟢 Production'}
+                        {isTest ? '⚡ SANDBOX' : '🟢 PRODUCTION'}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-medium">
+                      <span className="text-[11px] font-medium text-slate-400">
                         {meta.label}
                       </span>
                     </div>
                   </div>
 
+                  {/* Description */}
                   {api.description && (
-                    <p className="text-xs text-slate-300 mb-3 bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                    <p className="text-xs text-slate-300 mb-3 bg-slate-950/80 p-3 rounded-xl border border-slate-800 leading-relaxed">
                       {api.description}
                     </p>
                   )}
 
-                  <div className="space-y-1.5 mb-3 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400 text-[11px] w-20 shrink-0 font-semibold">Endpoint:</span>
-                      <span className="font-mono text-[11px] text-slate-200 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 truncate">
+                  {/* Metadata fields */}
+                  <div className="space-y-2 mb-4 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-400 font-medium">Endpoint:</span>
+                      <span className="font-mono text-[11px] text-slate-200 bg-slate-900 px-2 py-0.5 rounded border border-slate-700/60 truncate max-w-[210px]" title={api.api_base_url}>
                         {api.api_base_url || 'internal://engine'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400 text-[11px] w-20 shrink-0 font-semibold">สถานะระบบ:</span>
-                      <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> พร้อมรับออเดอร์
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-400 font-medium">สถานะ API:</span>
+                      <span className={`text-[11px] font-bold flex items-center gap-1.5 ${
+                        isActive ? 'text-emerald-400' : 'text-slate-500'
+                      }`}>
+                        <CheckCircle2 className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-slate-600'}`} />
+                        {isActive ? 'พร้อมรับออเดอร์ (Active)' : 'ปิดใช้งานชั่วคราว'}
                       </span>
                     </div>
+
+                    {api.code === 'finshop' && (
+                      <div className="flex items-center justify-between gap-2 text-[11px] pt-1 border-t border-slate-800">
+                        <span className="text-slate-400">สินค้าทดสอบ:</span>
+                        <span className="text-amber-400 font-mono font-bold">ID: 66 (฿0 THB)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-700/60 mt-1">
-                  <div className="text-[11px] text-slate-400">
-                    โหมด: <span className="font-bold text-slate-200">{isTest ? 'ทดลองส่งของจำลอง' : 'ส่งของจริง'}</span>
+                {/* Card Action Footer */}
+                <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {/* Real-time Edit Button */}
+                    <button
+                      onClick={() => openEditModal(api)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-200 border border-slate-700 hover:border-sky-500 transition-all flex items-center gap-1.5 shadow-sm"
+                      title="แก้ไขข้อมูล API แบบเรียลไทม์"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                      <span>แก้ไข API</span>
+                    </button>
+
+                    {/* Delete API Button */}
+                    <button
+                      onClick={() => handleDeleteProvider(api)}
+                      disabled={deletingId === api.id}
+                      className="p-1.5 rounded-xl text-rose-400 hover:text-white hover:bg-rose-600/30 border border-rose-500/40 transition text-xs flex items-center gap-1 font-semibold"
+                      title="ลบ API ออกจากระบบ"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
+
                   <div className="flex items-center gap-2">
-                    {hasDbProviders && (
+                    {api.code === 'finshop' ? (
                       <button
-                        onClick={() => handleDeleteProvider(api)}
-                        disabled={deletingId === api.id}
-                        className="p-1.5 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/30 transition text-xs flex items-center gap-1 font-semibold"
-                        title="ลบ Provider ออกจากระบบ"
+                        onClick={() => setActiveTab('finshop')}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600 hover:text-white border border-emerald-500/50 transition flex items-center gap-1.5 shadow-sm"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">ลบ</span>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        จัดการ FinShop
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openLiveSandbox(api.id, api.category)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-600/30 text-sky-300 hover:bg-sky-600 hover:text-white border border-sky-400/50 transition flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        Live Sandbox
                       </button>
                     )}
-                    <button
-                      onClick={() => openLiveSandbox(api.id, api.category)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-500/20 text-sky-300 hover:bg-sky-500 hover:text-white border border-sky-400/40 transition flex items-center gap-1.5 shadow-sm"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      เปิด Live Sandbox
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1416,5 +1589,159 @@ function FinShopManagerSection({
         )}
       </div>
     </div>
+
+      {/* Real-Time API Edit Modal */}
+      {editingApi && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <Sliders className="w-5 h-5 text-sky-400" />
+                  แก้ไข API แบบเรียลไทม์
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  แก้ไขข้อมูล API ของ {editingApi.name} ({editingApi.code}) ข้อมูลจะบันทึกและมีผลทันที
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingApi(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editSuccessMsg && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                {editSuccessMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveApiEdit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">ชื่อ Provider / API</label>
+                  <input
+                    type="text"
+                    required
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">รหัส Code (ห้ามซ้ำ)</label>
+                  <input
+                    type="text"
+                    required
+                    value={editFormData.code}
+                    onChange={(e) => setEditFormData({ ...editFormData, code: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-sky-400 font-mono text-sm focus:outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">หมวดหมู่ระบบ</label>
+                  <select
+                    value={editFormData.category}
+                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white text-sm focus:outline-none transition"
+                  >
+                    <option value="GAME_TOPUP">ระบบเติมเกม (GAME_TOPUP)</option>
+                    <option value="PREMIUM_APP">แอปพรีเมียม (PREMIUM_APP)</option>
+                    <option value="DIGITAL_PRODUCT">สินค้าดิจิทัล (DIGITAL_PRODUCT)</option>
+                    <option value="PAYMENT">ระบบชำระเงิน (PAYMENT)</option>
+                    <option value="AI">ระบบ AI ผู้ช่วย (AI)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">โหมดระบบ (Environment)</label>
+                  <select
+                    value={editFormData.environment}
+                    onChange={(e) => setEditFormData({ ...editFormData, environment: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white text-sm focus:outline-none transition"
+                  >
+                    <option value="sandbox">Sandbox (ทดลอง)</option>
+                    <option value="production">Production (ใช้งานจริง)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">Endpoint (API Base URL)</label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.api_base_url}
+                  onChange={(e) => setEditFormData({ ...editFormData, api_base_url: e.target.value })}
+                  placeholder="https://api.provider.com/v1"
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white font-mono text-sm focus:outline-none transition"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    API Key <span className="text-slate-500 font-normal">(เว้นว่างถ้าไม่ต้องการเปลี่ยน)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={editFormData.api_key}
+                    onChange={(e) => setEditFormData({ ...editFormData, api_key: e.target.value })}
+                    placeholder="••••••••••••"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white font-mono text-sm focus:outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    API Secret / Token <span className="text-slate-500 font-normal">(เว้นว่างถ้าไม่เปลี่ยน)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={editFormData.api_secret}
+                    onChange={(e) => setEditFormData({ ...editFormData, api_secret: e.target.value })}
+                    placeholder="••••••••••••"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl text-white font-mono text-sm focus:outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+                <div>
+                  <div className="text-xs font-bold text-white">สถานะเปิดรับออเดอร์ (Is Active)</div>
+                  <div className="text-[11px] text-slate-400">เปิดหรือปิดการทำงานของ API นี้ในระบบกลาง</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={editFormData.is_active}
+                  onChange={(e) => setEditFormData({ ...editFormData, is_active: e.target.checked })}
+                  className="w-5 h-5 rounded border-slate-700 text-sky-500 focus:ring-0 cursor-pointer accent-sky-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingApi(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-bold shadow-lg shadow-sky-600/30 transition flex items-center gap-2"
+                >
+                  {savingEdit ? 'กำลังบันทึก...' : 'บันทึกข้อมูลเรียลไทม์'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
   );
 }
