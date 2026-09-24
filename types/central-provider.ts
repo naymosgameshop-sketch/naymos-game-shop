@@ -11,6 +11,13 @@ export type ProviderEnvironment = 'sandbox' | 'production';
 
 export type ProviderHealthStatus = 'HEALTHY' | 'DEGRADED' | 'DOWN' | 'UNKNOWN';
 
+export type ProviderAvailabilityStatus =
+  | 'available'
+  | 'out_of_stock'
+  | 'provider_error'
+  | 'unavailable'
+  | 'unknown';
+
 export interface CentralProvider {
   id: string;
   name: string;
@@ -37,6 +44,22 @@ export interface CentralProvider {
   updated_at?: string;
 }
 
+export interface CentralProviderProduct {
+  id: string;
+  provider_id: string;
+  external_product_code: string;
+  external_name: string;
+  cost: number;
+  stock?: number | null;
+  availability: ProviderAvailabilityStatus;
+  is_active: boolean;
+  metadata?: Record<string, any>;
+  last_synced_at?: string;
+  error_message?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface CentralProviderRoute {
   id: string;
   route_key?: string;
@@ -56,7 +79,16 @@ export interface CentralProviderRoute {
 export interface ProviderExecutionRequest {
   provider_id?: string;
   route_key?: string;
-  action: 'validate_player' | 'topup' | 'deliver_package' | 'check_balance' | 'ping' | 'get_products' | 'purchase' | 'get_history' | 'report';
+  action:
+    | 'validate_player'
+    | 'topup'
+    | 'deliver_package'
+    | 'check_balance'
+    | 'ping'
+    | 'get_products'
+    | 'purchase'
+    | 'get_history'
+    | 'report';
   reference_id?: string;
   payload: Record<string, any>;
   is_sandbox?: boolean;
