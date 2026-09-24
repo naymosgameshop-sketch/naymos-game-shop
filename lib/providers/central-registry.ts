@@ -3,6 +3,7 @@ import { BaseProviderAdapter } from './adapters/base-adapter';
 import { MockGameAdapter } from './adapters/mock-game-adapter';
 import { MockDigitalAdapter } from './adapters/mock-digital-adapter';
 import { AIGatewayAdapter } from './adapters/ai-gateway-adapter';
+import { FinShopAdapter } from './adapters/finshop-adapter';
 import { createClient } from '@/lib/supabase/server';
 
 export class CentralProviderRegistry {
@@ -23,7 +24,9 @@ export class CentralProviderRegistry {
 
     let adapter: BaseProviderAdapter;
 
-    if (provider.code === 'ai-gateway' || provider.category === 'AI') {
+        if (provider.code === 'finshop') {
+      adapter = new FinShopAdapter(provider);
+    } else if (provider.code === 'ai-gateway' || provider.category === 'AI') {
       adapter = new AIGatewayAdapter(provider);
     } else if (
       provider.code.includes('digital') ||

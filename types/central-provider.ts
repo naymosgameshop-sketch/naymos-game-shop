@@ -56,7 +56,7 @@ export interface CentralProviderRoute {
 export interface ProviderExecutionRequest {
   provider_id?: string;
   route_key?: string;
-  action: 'validate_player' | 'topup' | 'deliver_package' | 'check_balance' | 'ping';
+  action: 'validate_player' | 'topup' | 'deliver_package' | 'check_balance' | 'ping' | 'get_products' | 'purchase' | 'get_history' | 'report';
   reference_id?: string;
   payload: Record<string, any>;
   is_sandbox?: boolean;

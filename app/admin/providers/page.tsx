@@ -96,7 +96,7 @@ const BUILT_IN_TRIAL_APIS = [
 ];
 
 export default function AdminProvidersHubPage() {
-  const [activeTab, setActiveTab] = useState<'providers' | 'routes' | 'sandbox' | 'logs'>('providers');
+  const [activeTab, setActiveTab] = useState<'providers' | 'finshop' | 'routes' | 'sandbox' | 'logs'>('providers');
   const [providers, setProviders] = useState<CentralProvider[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -1035,6 +1035,386 @@ export default function AdminProvidersHubPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FinShopManagerSection({
+  providers,
+  onRefresh,
+  onOpenSandbox,
+}: {
+  providers: CentralProvider[];
+  onRefresh: () => void;
+  onOpenSandbox: (p: CentralProvider) => void;
+}) {
+  const [finshopProducts, setFinshopProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [balanceData, setBalanceData] = useState<any | null>(null);
+  const [checkingBalance, setCheckingBalance] = useState(false);
+  const [reportTxId, setReportTxId] = useState('');
+  const [reportText, setReportText] = useState('เข้าไม่ได้');
+  const [reporting, setReporting] = useState(false);
+  const [reportResult, setReportResult] = useState<string | null>(null);
+  const [testConfirmOpen, setTestConfirmOpen] = useState(false);
+  const [testExecuting, setTestExecuting] = useState(false);
+  const [testResult, setTestResult] = useState<any | null>(null);
+
+  const finshopProvider = providers.find((p) => p.code === 'finshop');
+
+  const fetchFinshopProducts = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/providers/finshop/products');
+      const data = await res.json();
+      if (data.products) {
+        setFinshopProducts(data.products);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFinshopProducts();
+  }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/admin/providers/finshop/sync', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncMessage(`Sync สำเร็จ! ดึงข้อมูลสินค้าเข้ามา ${data.synced_count} รายการ (สถานะปิดขายเริ่มต้น)`);
+        fetchFinshopProducts();
+      } else {
+        setSyncMessage(`เกิดข้อผิดพลาด: ${data.error || 'Sync ไม่สำเร็จ'}`);
+      }
+    } catch (err: any) {
+      setSyncMessage(`เกิดข้อผิดพลาด: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleCheckBalance = async () => {
+    if (!finshopProvider) return;
+    setCheckingBalance(true);
+    try {
+      const res = await fetch(`/api/admin/providers/${finshopProvider.id}/health`, { method: 'POST' });
+      const data = await res.json();
+      setBalanceData(data);
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCheckingBalance(false);
+    }
+  };
+
+  const handleExecuteTest66 = async () => {
+    if (!finshopProvider) return;
+    setTestExecuting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/admin/providers/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider_id: finshopProvider.id,
+          action: 'purchase',
+          payload: {
+            product_id: 66,
+            customer: 'naymos_sandbox_tester',
+          },
+        }),
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (err: any) {
+      setTestResult({ error: err.message });
+    } finally {
+      setTestExecuting(false);
+      setTestConfirmOpen(false);
+    }
+  };
+
+  const handleSendReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportTxId) return;
+    setReporting(true);
+    setReportResult(null);
+    try {
+      const res = await fetch('/api/admin/providers/finshop/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_id: reportTxId,
+          report_text: reportText,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setReportResult('ส่งรายงานปัญหาไปยัง FinShop สำเร็จแล้ว');
+        setReportTxId('');
+      } else {
+        setReportResult(`เกิดข้อผิดพลาด: ${data.error}`);
+      }
+    } catch (err: any) {
+      setReportResult(`เกิดข้อผิดพลาด: ${err.message}`);
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Banner & Control */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-bold text-white">FinShop Central Provider</h3>
+                <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  DIGITAL PRODUCT
+                </span>
+                <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                  finshopProvider?.is_active
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {finshopProvider?.is_active ? 'เปิดใช้งาน (Active)' : 'ปิดใช้งาน (Inactive)'}
+                </span>
+              </div>
+              <p className="text-sm text-slate-400 mt-1">
+                เชื่อมต่อระบบสินค้าดิจิทัลและแอปพรีเมียมอัตโนมัติ (Base URL: https://finshop.me/api/v1)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleCheckBalance}
+              disabled={checkingBalance || !finshopProvider}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-sm font-medium border border-slate-700 transition"
+            >
+              <RefreshCw className={`w-4 h-4 ${checkingBalance ? 'animate-spin' : ''}`} />
+              ตรวจ Balance / Health
+            </button>
+            <button
+              onClick={handleSync}
+              disabled={syncing || !finshopProvider}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition shadow-lg shadow-emerald-600/20"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              Sync Products
+            </button>
+          </div>
+        </div>
+
+        {/* Balance & Status Bar */}
+        {balanceData && (
+          <div className="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-sm">
+            <div className="flex items-center gap-3">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <span className="text-slate-300">ผลการตรวจสถานะ: <strong>{balanceData.result?.message || balanceData.status}</strong></span>
+            </div>
+            <div className="text-slate-400">
+              Latency: <span className="text-white font-mono">{balanceData.result?.latency_ms || 0}ms</span>
+            </div>
+          </div>
+        )}
+
+        {syncMessage && (
+          <div className="mt-4 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-sm">
+            {syncMessage}
+          </div>
+        )}
+      </div>
+
+      {/* Test Product ID 66 Sandbox Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 text-xs font-mono font-bold rounded bg-sky-500/20 text-sky-400 border border-sky-400/30">
+                SANDBOX / TEST ONLY
+              </span>
+              <h4 className="text-base font-bold text-white">ทดสอบคำสั่งซื้อสินค้าปลอดภัย (Product ID: 66)</h4>
+            </div>
+            <p className="text-sm text-slate-400 mt-1">
+              ทดสอบยิงคำสั่งซื้อสินค้าจำลอง <strong>Test API (ID: 66) ราคา ฿0</strong> ไปยัง FinShop เพื่อตรวจสอบ Response และ Flow จัดส่ง
+            </p>
+          </div>
+          <button
+            onClick={() => setTestConfirmOpen(true)}
+            disabled={testExecuting || !finshopProvider}
+            className="flex items-center gap-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-semibold transition shadow-lg shadow-sky-600/20 whitespace-nowrap"
+          >
+            <Play className="w-4 h-4" />
+            ทดสอบซื้อสินค้า ID: 66 (฿0)
+          </button>
+        </div>
+
+        {/* Confirmation Modal */}
+        {testConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-lg font-bold text-white">ยืนยันการทดสอบสั่งซื้อ</h3>
+              <p className="text-sm text-slate-300 mt-2">
+                คุณกำลังจะส่งคำสั่งซื้อทดสอบไปยัง FinShop API:
+              </p>
+              <div className="mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono space-y-1">
+                <div>Product: <span className="text-sky-400">Test API</span></div>
+                <div>Product ID: <span className="text-emerald-400">66</span></div>
+                <div>Price / Cost: <span className="text-white">฿0 THB</span></div>
+                <div>Customer: <span className="text-amber-400">naymos_sandbox_tester</span></div>
+              </div>
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  onClick={() => setTestConfirmOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={handleExecuteTest66}
+                  disabled={testExecuting}
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold"
+                >
+                  {testExecuting ? 'กำลังสั่งซื้อ...' : 'ยืนยันสั่งซื้อทดสอบ'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {testResult && (
+          <div className="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800">
+            <div className="text-xs font-mono text-slate-400 mb-2">ผลลัพธ์การทดสอบ:</div>
+            <pre className="text-xs text-slate-200 overflow-x-auto p-2 bg-slate-900/60 rounded">
+              {JSON.stringify(testResult, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* FinShop Synced Products Table */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-base font-bold text-white">รายการสินค้าที่ Sync จาก FinShop ({finshopProducts.length})</h4>
+            <p className="text-xs text-slate-400 mt-0.5">
+              ราคาที่แสดงคือ <strong>ต้นทุน (Cost)</strong> จาก FinShop ราคาขายหน้าร้านจะกำหนดในระบบ Packages ของ NayMos
+            </p>
+          </div>
+          <button
+            onClick={fetchFinshopProducts}
+            disabled={loading}
+            className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800 transition"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-950 text-slate-400 text-xs uppercase font-medium">
+              <tr>
+                <th className="py-3 px-4">รหัสสินค้า (External ID)</th>
+                <th className="py-3 px-4">ชื่อสินค้าใน FinShop</th>
+                <th className="py-3 px-4">ต้นทุน (Cost)</th>
+                <th className="py-3 px-4">คงเหลือ (Stock)</th>
+                <th className="py-3 px-4">สถานะเปิดขาย</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {finshopProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-500">
+                    {loading ? 'กำลังโหลดข้อมูล...' : 'ยังไม่มีสินค้าที่ Sync เข้ามา กรุณากดปุ่ม Sync Products'}
+                  </td>
+                </tr>
+              ) : (
+                finshopProducts.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-800/30 transition">
+                    <td className="py-3 px-4 font-mono text-sky-400 font-semibold">{p.external_product_code}</td>
+                    <td className="py-3 px-4 text-white font-medium">{p.external_name}</td>
+                    <td className="py-3 px-4 font-mono text-emerald-400 font-semibold">฿{p.cost}</td>
+                    <td className="py-3 px-4 text-slate-300 font-mono">{p.metadata?.stock ?? '-'}</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        p.is_active
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                      }`}>
+                        {p.is_active ? 'เปิดขายแล้ว' : 'ปิดขาย (Synced)'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Transaction Report Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <h4 className="text-base font-bold text-white mb-2">รายงานปัญหาคำสั่งซื้อ (Report Transaction)</h4>
+        <p className="text-xs text-slate-400 mb-4">
+          กรณีลูกค้ารายงานปัญหาบัญชีใช้งานไม่ได้ สามารถส่ง Transaction ID ไปยัง FinShop เพื่อให้ระบบตรวจสอบ
+        </p>
+
+        <form onSubmit={handleSendReport} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Transaction ID</label>
+            <input
+              type="text"
+              value={reportTxId}
+              onChange={(e) => setReportTxId(e.target.value)}
+              placeholder="เช่น 8881"
+              required
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">ข้อความแจ้งปัญหา</label>
+            <input
+              type="text"
+              value={reportText}
+              onChange={(e) => setReportText(e.target.value)}
+              placeholder="เช่น เข้าไม่ได้ หรือ รหัสผ่านไม่ถูกต้อง"
+              required
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={reporting || !reportTxId}
+              className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-semibold transition"
+            >
+              {reporting ? 'กำลังส่งรายงาน...' : 'ส่งรายงานปัญหา (Report)'}
+            </button>
+          </div>
+        </form>
+
+        {reportResult && (
+          <div className="mt-4 p-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200">
+            {reportResult}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
