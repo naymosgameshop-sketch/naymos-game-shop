@@ -4,8 +4,18 @@ export type MockGame = {
   category: string;
   description: string;
   color: string;
+  icon?: string;
   fields: { name: string; label: string; placeholder: string; required: boolean }[];
   packages: { id: string; name: string; price: number; amount?: string }[];
+};
+
+export const GAME_COVERS: Record<string, string> = {
+  'free-fire': 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=800&auto=format&fit=crop',
+  'rov': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=800&auto=format&fit=crop',
+  'mobile-legends': 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?q=80&w=800&auto=format&fit=crop',
+  'valorant': 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=800&auto=format&fit=crop',
+  'genshin-impact': 'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=800&auto=format&fit=crop',
+  'pubg-mobile': 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?q=80&w=800&auto=format&fit=crop',
 };
 
 export const MOCK_GAMES: MockGame[] = [
@@ -13,8 +23,9 @@ export const MOCK_GAMES: MockGame[] = [
     slug: 'free-fire',
     name: 'Free Fire',
     category: 'Battle Royale',
-    description: 'เติมเพชร Free Fire รวดเร็ว ปลอดภัย ระบบอัตโนมัติ',
+    description: 'เติมเกม Free Fire ฟรอยด์เพชร ปลอดภัย ได้รับทันที',
     color: 'from-orange-600 to-red-700',
+    icon: GAME_COVERS['free-fire'],
     fields: [{ name: 'uid', label: 'Player ID (UID)', placeholder: 'กรอก UID 9-10 หลัก', required: true }],
     packages: [
       { id: 'ff-100', name: '100 เพชร', price: 29, amount: '100' },
@@ -29,9 +40,10 @@ export const MOCK_GAMES: MockGame[] = [
     slug: 'rov',
     name: 'RoV',
     category: 'MOBA',
-    description: 'เติมคูปอง RoV (Arena of Valor) ระบบอัตโนมัติ',
+    description: 'เติมคูปอง RoV (Arena of Valor) รวดเร็วทันใจ',
     color: 'from-blue-600 to-indigo-700',
-    fields: [{ name: 'openid', label: 'Open ID', placeholder: 'กรอก Open ID จากหน้าโปรไฟล์', required: true }],
+    icon: GAME_COVERS['rov'],
+    fields: [{ name: 'openid', label: 'Open ID', placeholder: 'กรอก Open ID จากหน้าโปรไฟล์เกม', required: true }],
     packages: [
       { id: 'rov-35', name: '35 คูปอง', price: 35, amount: '35' },
       { id: 'rov-90', name: '90 คูปอง', price: 90, amount: '90' },
@@ -44,8 +56,9 @@ export const MOCK_GAMES: MockGame[] = [
     slug: 'mobile-legends',
     name: 'Mobile Legends',
     category: 'MOBA',
-    description: 'เติม Diamonds MLBB รวดเร็ว ปลอดภัย',
+    description: 'เติม Diamonds MLBB สะดวก รวดเร็ว',
     color: 'from-cyan-600 to-blue-700',
+    icon: GAME_COVERS['mobile-legends'],
     fields: [
       { name: 'user_id', label: 'User ID', placeholder: 'กรอก User ID', required: true },
       { name: 'zone_id', label: 'Zone ID', placeholder: 'กรอก Zone ID', required: true },
@@ -65,8 +78,9 @@ export const MOCK_GAMES: MockGame[] = [
     category: 'FPS',
     description: 'เติม Valorant Points ผ่าน Riot ID',
     color: 'from-red-600 to-rose-800',
+    icon: GAME_COVERS['valorant'],
     fields: [
-      { name: 'riot_id', label: 'Riot ID', placeholder: 'ชื่อผู้เล่น', required: true },
+      { name: 'riot_id', label: 'Riot ID', placeholder: 'ชื่อในเกม', required: true },
       { name: 'tagline', label: 'Tagline', placeholder: 'เช่น TH1', required: true },
       { name: 'region', label: 'Region', placeholder: 'AP / EU / NA', required: true },
     ],
@@ -84,6 +98,7 @@ export const MOCK_GAMES: MockGame[] = [
     category: 'RPG',
     description: 'เติม Genesis Crystals / Blessing of the Welkin Moon',
     color: 'from-amber-500 to-orange-600',
+    icon: GAME_COVERS['genshin-impact'],
     fields: [
       { name: 'uid', label: 'UID', placeholder: 'UID 8-9 หลัก', required: true },
       { name: 'server', label: 'Server', placeholder: 'Asia / Europe / America', required: true },
@@ -101,8 +116,9 @@ export const MOCK_GAMES: MockGame[] = [
     slug: 'pubg-mobile',
     name: 'PUBG Mobile',
     category: 'Battle Royale',
-    description: 'เติม UC PUBG Mobile รวดเร็ว',
+    description: 'เติม UC PUBG Mobile รวดเร็วทันใจ',
     color: 'from-yellow-600 to-amber-800',
+    icon: GAME_COVERS['pubg-mobile'],
     fields: [{ name: 'uid', label: 'Player ID', placeholder: 'กรอก Player ID', required: true }],
     packages: [
       { id: 'pubg-60', name: '60 UC', price: 29, amount: '60' },

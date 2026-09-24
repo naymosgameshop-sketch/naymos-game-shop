@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createPublicClient, createClient } from "@/lib/supabase/server";
-import { MOCK_GAMES, type MockGame } from "@/lib/data/games";
+import { MOCK_GAMES, GAME_COVERS, type MockGame } from "@/lib/data/games";
 import type { Game, GameField, Product, ProductCategory } from "@/types/game";
 
 export type GameWithDetails = Game & {
@@ -12,9 +12,9 @@ export type GameWithDetails = Game & {
 
 const COLOR_MAP: Record<string, string> = {
   "free-fire": "from-orange-600 to-red-700",
-  rov: "from-blue-600 to-indigo-700",
+  "rov": "from-blue-600 to-indigo-700",
   "mobile-legends": "from-cyan-600 to-blue-700",
-  valorant: "from-red-600 to-rose-800",
+  "valorant": "from-red-600 to-rose-800",
   "genshin-impact": "from-amber-500 to-orange-600",
   "pubg-mobile": "from-yellow-600 to-amber-800",
 };
@@ -33,7 +33,7 @@ function mockToGameWithDetails(m: MockGame, index: number): GameWithDetails {
     category: m.category,
     product_category_id: null,
     product_category: null,
-    icon: null,
+    icon: m.icon || GAME_COVERS[m.slug] || null,
     banner: null,
     is_active: true,
     provider_availability: 'available',
@@ -142,7 +142,7 @@ export const getActiveGames = cache(async (): Promise<GameWithDetails[]> => {
           .select(
             `${GAME_SELECT_COLUMNS}, product_category:product_categories(id, slug, name, description, is_active, sort_order), game_fields(${GAME_FIELDS_COLUMNS}), products(${SAFE_PRODUCTS_COLUMNS})`
           )
-          .eq("is_active", true) // Admin Storefront Visibility filter
+          .eq("is_active", true)
           .order("sort_order", { ascending: true });
 
         if (!error && dbGames && dbGames.length > 0) {
@@ -158,6 +158,7 @@ export const getActiveGames = cache(async (): Promise<GameWithDetails[]> => {
             }
             return {
               ...g,
+              icon: g.icon || GAME_COVERS[g.slug] || null,
               game_fields: fields,
               products,
               color: COLOR_MAP[g.slug] || "from-sky-600 to-blue-700",
@@ -169,7 +170,7 @@ export const getActiveGames = cache(async (): Promise<GameWithDetails[]> => {
       }
       return MOCK_GAMES.map(mockToGameWithDetails);
     },
-    ["active-games-catalog-v2"],
+    ["active-games-catalog-v3"],
     { revalidate: 60, tags: ["games"] }
   )();
 });
@@ -200,6 +201,7 @@ export const getGameBySlug = cache(
             }
             return {
               ...data,
+              icon: data.icon || GAME_COVERS[s] || null,
               game_fields: fields,
               products,
               color: COLOR_MAP[s] || "from-sky-600 to-blue-700",
@@ -214,7 +216,7 @@ export const getGameBySlug = cache(
         }
         return null;
       },
-      [`game-by-slug-v2-${slug}`],
+      [`game-by-slug-v3-${slug}`],
       { revalidate: 60, tags: [`game-${slug}`] }
     )(slug);
   }
@@ -233,6 +235,7 @@ export async function getAllGamesAdmin(): Promise<GameWithDetails[]> {
     if (!error && data) {
       return data.map((g: any) => ({
         ...g,
+        icon: g.icon || GAME_COVERS[g.slug] || null,
         game_fields: (g.game_fields || []).sort(
           (a: any, b: any) => a.sort_order - b.sort_order
         ),

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Gamepad2, Ban } from 'lucide-react';
 import type { GameWithDetails } from '@/lib/games/queries';
+import { GAME_COVERS } from '@/lib/data/games';
 
 interface GameCardProps {
   game: GameWithDetails;
@@ -12,6 +13,9 @@ interface GameCardProps {
 }
 
 export const GameCard = memo(function GameCard({ game, priority = false }: GameCardProps) {
+  // Reliable image resolution: icon from DB -> fallback cover map
+  const displayIcon = game.icon || GAME_COVERS[game.slug] || null;
+
   // Provider Availability & Package Stock Check
   const isProviderDown =
     game.provider_availability && game.provider_availability !== 'available';
@@ -44,11 +48,11 @@ export const GameCard = memo(function GameCard({ game, priority = false }: GameC
 
   const statusLabel = isProviderDown
     ? game.provider_availability === 'provider_error'
-      ? 'ระบบต้นทางปิดปรับปรุง'
-      : 'ไม่พร้อมให้บริการ'
+      ? 'ระบบขัดข้องชั่วคราว'
+      : 'ปิดปรับปรุงชั่วคราว'
     : allPackagesOutOfStock
     ? 'สินค้าหมดชั่วคราว'
-    : 'ไม่พร้อมให้บริการ';
+    : 'ปิดปรับปรุงชั่วคราว';
 
   return (
     <Link
@@ -61,9 +65,9 @@ export const GameCard = memo(function GameCard({ game, priority = false }: GameC
       }`}
     >
       <div className="relative aspect-square w-full rounded-lg sm:rounded-xl overflow-hidden bg-gradient-to-br from-sky-50/80 to-blue-50/80 border border-sky-100/50 flex items-center justify-center">
-        {game.icon ? (
+        {displayIcon ? (
           <Image
-            src={game.icon}
+            src={displayIcon}
             alt={game.name}
             fill
             unoptimized
@@ -109,12 +113,12 @@ export const GameCard = memo(function GameCard({ game, priority = false }: GameC
           {game.name}
         </h3>
         <div className="flex items-center justify-between mt-1 text-[10px] sm:text-[11px] text-slate-400">
-          <span className="line-clamp-1">{game.category || 'เติมเกมออนไลน์'}</span>
+          <span className="line-clamp-1">{game.category || 'เติมเกมอัตโนมัติ'}</span>
           {isUnavailable ? (
-            <span className="text-rose-500 font-medium">ไม่พร้อมให้บริการ</span>
+            <span className="text-rose-500 font-medium">ปิดให้บริการ</span>
           ) : (
             <span className="text-sky-600 font-semibold group-hover:translate-x-0.5 transition-transform">
-              เติมเงิน &rarr;
+              เติมทันที &rarr;
             </span>
           )}
         </div>
