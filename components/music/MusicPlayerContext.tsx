@@ -266,10 +266,29 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   );
 }
 
+const DEFAULT_PLAYER: MusicPlayerContextType = {
+  tracks: [],
+  currentTrack: null,
+  currentIndex: 0,
+  isPlaying: false,
+  isMuted: false,
+  masterVolume: 0.65,
+  effectiveVolume: 0,
+  togglePlay: () => {},
+  play: async () => {},
+  pause: async () => {},
+  toggleMute: () => {},
+  setMasterVolume: () => {},
+  nextTrack: () => {},
+  prevTrack: () => {},
+  selectTrack: () => {},
+  refreshPlaylist: async () => {},
+};
+
 export function useMusicPlayer() {
   const context = useContext(MusicPlayerContext);
   if (!context) {
-    throw new Error('useMusicPlayer must be used within MusicPlayerProvider');
+    return DEFAULT_PLAYER;
   }
   return context;
 }

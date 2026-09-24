@@ -5,6 +5,7 @@ import { Volume2, VolumeX, Play, Pause, SkipForward, SkipBack, Music } from 'luc
 import { useMusicPlayer } from './MusicPlayerContext';
 
 export function HeaderMusicButton() {
+  const [mounted, setMounted] = useState(false);
   const {
     currentTrack,
     tracks,
@@ -23,6 +24,10 @@ export function HeaderMusicButton() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -35,6 +40,20 @@ export function HeaderMusicButton() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
+
+  if (!mounted) {
+    return (
+      <div className="relative inline-flex items-center">
+        <button
+          type="button"
+          className="relative flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-full border bg-white text-slate-400 border-sky-200 shadow-xs"
+          aria-label="เครื่องเล่นเพลงเว็บไซต์"
+        >
+          <VolumeX className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
+        </button>
+      </div>
+    );
+  }
 
   const isSoundOn = isPlaying && !isMuted && masterVolume > 0;
 
