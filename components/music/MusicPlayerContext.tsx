@@ -11,7 +11,6 @@ interface MusicPlayerContextType {
   isMuted: boolean;
   masterVolume: number;
   effectiveVolume: number;
-  hasUserInteracted: boolean;
   togglePlay: () => void;
   play: () => Promise<void>;
   pause: () => Promise<void>;
@@ -25,7 +24,6 @@ interface MusicPlayerContextType {
 
 const MusicPlayerContext = createContext<MusicPlayerContextType | undefined>(undefined);
 
-// Automatic smooth fade durations (applied to EVERY track start/end/switch)
 const FADE_IN_DURATION = 1500;
 const FADE_OUT_DURATION = 1200;
 const FADE_STEPS = 25;
@@ -36,7 +34,6 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [masterVolume, setMasterVolumeState] = useState<number>(0.65);
-  const [hasUserInteracted, setHasUserInteracted] = useState<boolean>(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -60,7 +57,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       if (!audio) return Promise.resolve();
 
       return new Promise<void>((resolve) => {
-        const stepTime = durationMs / FADE_STEPS;
+        const stepTime = Math.max(16, durationMs / FADE_STEPS);
         const volStep = (toVol - fromVol) / FADE_STEPS;
         let currentStep = 0;
         audio.volume = Math.min(1, Math.max(0, fromVol));
@@ -68,10 +65,12 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         fadeIntervalRef.current = setInterval(() => {
           currentStep++;
           const newVol = fromVol + volStep * currentStep;
-          audio.volume = Math.min(1, Math.max(0, newVol));
+          if (audio) {
+            audio.volume = Math.min(1, Math.max(0, newVol));
+          }
           if (currentStep >= FADE_STEPS) {
             clearFade();
-            audio.volume = Math.min(1, Math.max(0, toVol));
+            if (audio) audio.volume = Math.min(1, Math.max(0, toVol));
             resolve();
           }
         }, stepTime);
@@ -107,9 +106,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       if (savedVol !== null) setMasterVolumeState(Number(savedVol));
       const savedMute = localStorage.getItem('naymos_bgm_muted');
       if (savedMute !== null) setIsMuted(savedMute === 'true');
-    } catch {
-      // Ignore storage errors
-    }
+    } catch {}
   }, []);
 
   const refreshPlaylist = useCallback(async () => {
@@ -120,32 +117,13 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         setTracks(data.tracks);
       }
     } catch (e) {
-      console.warn('Could not load BGM tracks, will use fallback', e);
+      console.warn('Could not load BGM tracks, fallback loaded', e);
     }
   }, []);
 
   useEffect(() => {
     refreshPlaylist();
   }, [refreshPlaylist]);
-
-  useEffect(() => {
-    const onInteract = () => {
-      setHasUserInteracted(true);
-      window.removeEventListener('click', onInteract);
-      window.removeEventListener('keydown', onInteract);
-      window.removeEventListener('touchstart', onInteract);
-    };
-
-    window.addEventListener('click', onInteract, { once: true });
-    window.addEventListener('keydown', onInteract, { once: true });
-    window.addEventListener('touchstart', onInteract, { once: true });
-
-    return () => {
-      window.removeEventListener('click', onInteract);
-      window.removeEventListener('keydown', onInteract);
-      window.removeEventListener('touchstart', onInteract);
-    };
-  }, []);
 
   const switchTrack = useCallback(
     async (nextIdx: number) => {
@@ -155,7 +133,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       const audio = audioRef.current;
       try {
         if (audio && !audio.paused && isPlaying) {
-          await fadeOut(); // smooth fade-out of current track
+          await fadeOut();
         }
 
         const nextTrackData = tracks[nextIdx];
@@ -164,7 +142,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         if (audio) {
           audio.src = nextTrackData.audio_url;
           const nextTargetVol = isMuted ? 0 : masterVolume * (nextTrackData.track_volume ?? 0.7);
-          await fadeIn(nextTargetVol); // smooth fade-in of next track
+          await fadeIn(nextTargetVol);
         }
       } catch (err) {
         console.warn('Playback switch error:', err);
@@ -177,13 +155,16 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
 
   const play = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio || !currentTrack) return;
-    if (!audio.src || !audio.src.includes(currentTrack.audio_url)) {
-      audio.src = currentTrack.audio_url;
+    if (!audio) return;
+    const track = tracks[currentIndex] || tracks[0];
+    if (!track) return;
+
+    if (!audio.src || !audio.src.includes(track.audio_url)) {
+      audio.src = track.audio_url;
     }
-    const finalVol = isMuted ? 0 : masterVolume * (currentTrack.track_volume ?? 0.7);
+    const finalVol = isMuted ? 0 : masterVolume * (track.track_volume ?? 0.7);
     await fadeIn(finalVol);
-  }, [currentTrack, isMuted, masterVolume, fadeIn]);
+  }, [tracks, currentIndex, isMuted, masterVolume, fadeIn]);
 
   const pause = useCallback(async () => {
     await fadeOut();
@@ -202,9 +183,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       const next = !prev;
       try {
         localStorage.setItem('naymos_bgm_muted', String(next));
-      } catch {
-        // Ignore storage errors
-      }
+      } catch {}
       const audio = audioRef.current;
       if (audio && isPlaying) {
         const target = next ? 0 : masterVolume * (currentTrack?.track_volume ?? 0.7);
@@ -220,9 +199,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       setMasterVolumeState(safe);
       try {
         localStorage.setItem('naymos_bgm_volume', String(safe));
-      } catch {
-        // Ignore storage errors
-      }
+      } catch {}
 
       if (!isMuted && audioRef.current && isPlaying) {
         const target = safe * (currentTrack?.track_volume ?? 0.7);
@@ -232,6 +209,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     [isMuted, isPlaying, currentTrack]
   );
 
+  // Play next track, and loop back to track 0 when reaching the end!
   const nextTrack = useCallback(() => {
     if (tracks.length === 0) return;
     const nextIdx = (currentIndex + 1) % tracks.length;
@@ -264,7 +242,6 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         isMuted,
         masterVolume,
         effectiveVolume: targetVolume,
-        hasUserInteracted,
         togglePlay,
         play,
         pause,
@@ -280,6 +257,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         ref={audioRef}
         preload="auto"
         onEnded={() => {
+          // Song finished: automatic fade-out and advance to next track, loops back to first
           nextTrack();
         }}
       />

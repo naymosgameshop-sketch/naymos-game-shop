@@ -1,32 +1,56 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Music, Plus, Trash2, Volume2, Play, Pause, Save, CheckCircle, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Music,
+  Plus,
+  Trash2,
+  Volume2,
+  Play,
+  Pause,
+  Save,
+  CheckCircle,
+  RefreshCw,
+  AlertCircle,
+  ArrowUp,
+  ArrowDown,
+  Database,
+  Minus,
+} from 'lucide-react';
 import { MusicTrack } from '@/types/music';
 
 export default function AdminMusicPage() {
   const [tracks, setTracks] = useState<MusicTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSchemaMissing, setIsSchemaMissing] = useState(false);
 
   const [newTitle, setNewTitle] = useState('');
   const [newAudioUrl, setNewAudioUrl] = useState('');
   const [newVolume, setNewVolume] = useState(0.7);
   const [isAdding, setIsAdding] = useState(false);
 
+  // Live preview
   const [previewTrackId, setPreviewTrackId] = useState<string | null>(null);
-  const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const fetchTracks = async () => {
     setLoading(true);
+    setMessage(null);
     try {
       const res = await fetch('/api/admin/music');
       const data = await res.json();
       if (data?.tracks) {
         setTracks(data.tracks);
       }
-    } catch (err) {
+      if (data?.schemaMissing) {
+        setIsSchemaMissing(true);
+      } else {
+        setIsSchemaMissing(false);
+      }
+    } catch {
       setMessage({ type: 'error', text: 'ไม่สามารถโหลดรายการเพลงได้' });
     } finally {
       setLoading(false);
@@ -36,12 +60,71 @@ export default function AdminMusicPage() {
   useEffect(() => {
     fetchTracks();
     return () => {
-      if (previewAudio) {
-        previewAudio.pause();
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Update volume in real-time while preview is playing
+  const handleVolumeChange = (trackId: string, newVol: number) => {
+    const safeVol = Math.min(1, Math.max(0, Math.round(newVol * 100) / 100));
+    setTracks((prev) =>
+      prev.map((t) => (t.id === trackId ? { ...t, track_volume: safeVol } : t))
+    );
+
+    // If currently testing this track, sync audio volume instantly!
+    if (previewTrackId === trackId && previewAudioRef.current) {
+      previewAudioRef.current.volume = safeVol;
+    }
+  };
+
+  // Move track up (play sooner)
+  const moveTrackUp = async (index: number) => {
+    if (index === 0) return;
+    const newTracks = [...tracks];
+    const temp = newTracks[index - 1];
+    newTracks[index - 1] = newTracks[index];
+    newTracks[index] = temp;
+
+    // re-assign sort_orders
+    const updated = newTracks.map((t, idx) => ({ ...t, sort_order: idx + 1 }));
+    setTracks(updated);
+    await saveNewOrder(updated);
+  };
+
+  // Move track down (play later)
+  const moveTrackDown = async (index: number) => {
+    if (index === tracks.length - 1) return;
+    const newTracks = [...tracks];
+    const temp = newTracks[index + 1];
+    newTracks[index + 1] = newTracks[index];
+    newTracks[index] = temp;
+
+    const updated = newTracks.map((t, idx) => ({ ...t, sort_order: idx + 1 }));
+    setTracks(updated);
+    await saveNewOrder(updated);
+  };
+
+  const saveNewOrder = async (orderList: MusicTrack[]) => {
+    setIsSavingOrder(true);
+    try {
+      const orders = orderList.map((t, idx) => ({ id: t.id, sort_order: idx + 1 }));
+      const res = await fetch('/api/admin/music', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reorder', orders }),
+      });
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'จัดอันดับเพลงเรียบร้อยแล้ว (เพลงบนสุดจะเล่นเป็นเพลงแรก)' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'บันทึกลำดับไม่สำเร็จ' });
+    } finally {
+      setIsSavingOrder(false);
+    }
+  };
 
   const handleUpdate = async (track: MusicTrack) => {
     setSavingId(track.id);
@@ -53,10 +136,20 @@ export default function AdminMusicPage() {
         body: JSON.stringify(track),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Update failed');
-      setMessage({ type: 'success', text: 'บันทึก "' + track.title + '" เรียบร้อยแล้ว' });
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Update failed');
+      }
+      if (data.track) {
+        setTracks((prev) => prev.map((t) => (t.id === track.id ? data.track : t)));
+      }
+      setMessage({ type: 'success', text: 'บันทึกเพลง "' + track.title + '" (เสียง ' + Math.round(track.track_volume * 100) + '%) เรียบร้อยแล้ว' });
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'บันทึกล้มเหลว' });
+      setMessage({
+        type: 'error',
+        text: err.message?.includes('schema cache')
+          ? 'ฐานข้อมูลยังไม่มีตาราง site_music กรุณารัน SQL Migration ใน Supabase ก่อน'
+          : err.message || 'บันทึกล้มเหลว',
+      });
     } finally {
       setSavingId(null);
     }
@@ -69,6 +162,10 @@ export default function AdminMusicPage() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Delete failed');
       setTracks((prev) => prev.filter((t) => t.id !== id));
+      if (previewTrackId === id && previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        setPreviewTrackId(null);
+      }
       setMessage({ type: 'success', text: 'ลบเพลง "' + title + '" เรียบร้อยแล้ว' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'ลบล้มเหลว' });
@@ -107,15 +204,15 @@ export default function AdminMusicPage() {
 
   const togglePreview = (track: MusicTrack) => {
     if (previewTrackId === track.id) {
-      previewAudio?.pause();
+      previewAudioRef.current?.pause();
       setPreviewTrackId(null);
     } else {
-      if (previewAudio) previewAudio.pause();
+      if (previewAudioRef.current) previewAudioRef.current.pause();
       const audio = new Audio(track.audio_url);
       audio.volume = track.track_volume;
       audio.play().catch(console.error);
       audio.onended = () => setPreviewTrackId(null);
-      setPreviewAudio(audio);
+      previewAudioRef.current = audio;
       setPreviewTrackId(track.id);
     }
   };
@@ -129,7 +226,7 @@ export default function AdminMusicPage() {
             <h1 className="text-xl sm:text-2xl font-bold text-white">จัดการระบบเพลงพื้นหลัง (BGM)</h1>
           </div>
           <p className="text-sm text-slate-400 mt-1">
-            เปลี่ยนเพลง / ปรับเสียงแต่ละเพลง — ทุกเพลงจะ Fade-In ตอนเริ่ม และ Fade-Out ตอนจบหรือเปลี่ยนเพลงอัตโนมัติ
+            เข้าเว็บ 3 วินาทีเพลงแรกจะเริ่มเล่นอัตโนมัติ (Fade-In) และวนลูปเพลงไปเรื่อยๆ | จัดอันดับเพลงที่ต้องการให้เล่นก่อน-หลังได้
           </p>
         </div>
         <button
@@ -141,6 +238,24 @@ export default function AdminMusicPage() {
         </button>
       </div>
 
+      {isSchemaMissing && (
+        <div className="flex items-start gap-3 p-4 rounded-xl border bg-amber-950/40 border-amber-500/40 text-amber-200 text-sm">
+          <Database className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-amber-300">
+              ยังไม่พบตาราง public.site_music ในฐานข้อมูล Supabase
+            </p>
+            <p className="text-xs text-amber-200/90 leading-relaxed">
+              กรุณานำโค้ด Migration 035 ไปรันใน <strong>Supabase SQL Editor</strong> และรันคำสั่ง{' '}
+              <code className="bg-black/40 px-1 py-0.5 rounded font-mono text-amber-300">
+                NOTIFY pgrst, &apos;reload schema&apos;;
+              </code>{' '}
+              เพื่อให้ระบบบันทึกลงฐานข้อมูลจริงได้
+            </p>
+          </div>
+        </div>
+      )}
+
       {message && (
         <div
           className={
@@ -150,11 +265,16 @@ export default function AdminMusicPage() {
               : 'bg-rose-950/40 border-rose-500/40 text-rose-200')
           }
         >
-          {message.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+          {message.type === 'success' ? (
+            <CheckCircle className="h-4 w-4 shrink-0" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0" />
+          )}
           {message.text}
         </div>
       )}
 
+      {/* Add New Song */}
       <div className="rounded-2xl bg-slate-800/80 border border-slate-700 p-5 shadow-lg">
         <h2 className="text-base font-bold text-white flex items-center gap-2 mb-4">
           <Plus className="h-4 w-4 text-sky-400" />
@@ -173,10 +293,10 @@ export default function AdminMusicPage() {
             />
           </div>
           <div className="md:col-span-5">
-            <label className="block text-xs font-semibold text-slate-300 mb-1">URL หรือพาธไฟล์เพลง</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">URL หรือไฟล์เพลง (Path)</label>
             <input
               type="text"
-              placeholder="เช่น /audio/bgm-01.mp3 หรือ https://..."
+              placeholder="เช่น /audio/bgm-01.mp3 หรือ URL HTTPS"
               value={newAudioUrl}
               onChange={(e) => setNewAudioUrl(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-sm focus:border-sky-400 focus:outline-none font-mono text-xs"
@@ -209,27 +329,66 @@ export default function AdminMusicPage() {
         </form>
       </div>
 
+      {/* Playlist & Order Management */}
       <div className="rounded-2xl bg-slate-800/80 border border-slate-700 p-5 shadow-lg space-y-4">
-        <h2 className="text-base font-bold text-white flex items-center gap-2">
-          <Music className="h-4 w-4 text-sky-400" />
-          รายการเพลงในระบบ ({tracks.length})
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Music className="h-4 w-4 text-sky-400" />
+              ลำดับการเล่นเพลง ({tracks.length})
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              เพลงอันดับ #1 จะเล่นก่อนเมื่อเข้าเว็บครบ 3 วินาที จากนั้นจะต่อด้วย #2 และวนกลับมา #1 เมื่อจบ
+            </p>
+          </div>
+          {isSavingOrder && (
+            <span className="text-xs text-sky-400 animate-pulse font-medium">กำลังบันทึกลำดับ...</span>
+          )}
+        </div>
 
         {tracks.length === 0 && !loading && (
           <p className="text-sm text-slate-400 text-center py-6">ยังไม่มีเพลงในระบบ</p>
         )}
 
         <div className="space-y-3">
-          {tracks.map((track) => (
+          {tracks.map((track, idx) => (
             <div
               key={track.id}
               className={
-                'flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-4 rounded-xl border transition ' +
+                'flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-4 rounded-xl border transition ' +
                 (track.is_active
                   ? 'bg-slate-900/80 border-slate-700'
                   : 'bg-slate-900/30 border-slate-800 opacity-60')
               }
             >
+              {/* Order buttons & Index Badge */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="flex items-center justify-center h-7 w-7 rounded-lg bg-sky-500/20 text-sky-300 font-black text-xs border border-sky-500/30">
+                  #{idx + 1}
+                </span>
+                <div className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => moveTrackUp(idx)}
+                    disabled={idx === 0}
+                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-25 transition"
+                    title="เลื่อนขึ้น (เล่นก่อน)"
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveTrackDown(idx)}
+                    disabled={idx === tracks.length - 1}
+                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-25 transition"
+                    title="เลื่อนลง (เล่นทีหลัง)"
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Play preview & Title */}
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <button
                   type="button"
@@ -249,7 +408,9 @@ export default function AdminMusicPage() {
                     value={track.title}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, title: val } : t)));
+                      setTracks((prev) =>
+                        prev.map((t) => (t.id === track.id ? { ...t, title: val } : t))
+                      );
                     }}
                     className="w-full bg-transparent font-bold text-white text-sm focus:bg-slate-800 px-2 py-1 rounded-lg border border-transparent focus:border-slate-600 focus:outline-none"
                   />
@@ -257,13 +418,17 @@ export default function AdminMusicPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 flex-wrap md:flex-nowrap shrink-0">
-                <div className="flex items-center gap-2">
-                  <Volume2 className="h-4 w-4 text-slate-400 shrink-0" />
-                  <div className="w-28">
+              {/* Volume Slider & Controls */}
+              <div className="flex items-center gap-3 flex-wrap lg:flex-nowrap shrink-0">
+                {/* Real-time Volume Adjustment */}
+                <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-xl border border-slate-700/60">
+                  <Volume2 className="h-4 w-4 text-sky-400 shrink-0" />
+                  <div className="w-32">
                     <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
-                      <span>ปรับเสียง</span>
-                      <span className="font-mono">{Math.round(track.track_volume * 100)}%</span>
+                      <span>ระดับเสียง</span>
+                      <span className="font-mono font-bold text-white">
+                        {Math.round(track.track_volume * 100)}%
+                      </span>
                     </div>
                     <input
                       type="range"
@@ -271,28 +436,48 @@ export default function AdminMusicPage() {
                       max="1"
                       step="0.05"
                       value={track.track_volume}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, track_volume: val } : t)));
-                      }}
+                      onChange={(e) => handleVolumeChange(track.id, parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-400"
                     />
                   </div>
+                  {/* Quick - / + buttons */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleVolumeChange(track.id, track.track_volume - 0.05)}
+                      className="p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                      title="ลดเสียง 5%"
+                    >
+                      <Minus className="h-2.5 w-2.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleVolumeChange(track.id, track.track_volume + 0.05)}
+                      className="p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                      title="เพิ่มเสียง 5%"
+                    >
+                      <Plus className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
                 </div>
 
+                {/* Active Toggle */}
                 <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={track.is_active}
                     onChange={(e) => {
                       const checked = e.target.checked;
-                      setTracks((prev) => prev.map((t) => (t.id === track.id ? { ...t, is_active: checked } : t)));
+                      setTracks((prev) =>
+                        prev.map((t) => (t.id === track.id ? { ...t, is_active: checked } : t))
+                      );
                     }}
                     className="rounded border-slate-700 bg-slate-900 text-sky-500 focus:ring-sky-500 h-4 w-4"
                   />
                   <span>เปิดใช้งาน</span>
                 </label>
 
+                {/* Save button */}
                 <button
                   type="button"
                   onClick={() => handleUpdate(track)}
@@ -303,6 +488,7 @@ export default function AdminMusicPage() {
                   {savingId === track.id ? '...' : 'บันทึก'}
                 </button>
 
+                {/* Delete button */}
                 <button
                   type="button"
                   onClick={() => handleDelete(track.id, track.title)}
