@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { maskSecretPreview } from '@/lib/providers/security/masking';
 
 export const dynamic = 'force-dynamic';
 
+async function getSupabase() {
+  try {
+    return createAdminClient();
+  } catch {
+    return await createClient();
+  }
+}
+
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const supabase = await getSupabase();
 
     const { data: providers, error } = await supabase
       .from('providers')
@@ -18,8 +27,7 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Mask sensitive keys before returning to UI
-    const safeProviders = (providers || []).map((p) => ({
+    const safeProviders = (providers || []).map((p: any) => ({
       ...p,
       api_key: p.api_key ? maskSecretPreview(p.api_key) : null,
       api_secret: p.api_secret ? maskSecretPreview(p.api_secret) : null,
@@ -34,7 +42,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = await getSupabase();
     const body = await req.json();
 
     const {
@@ -62,7 +70,7 @@ export async function POST(req: NextRequest) {
       .from('providers')
       .insert({
         name,
-        code,
+        code: code.toLowerCase(),
         category: category || 'GAME_TOPUP',
         type: type || 'ALL',
         api_base_url,
