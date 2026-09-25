@@ -32,7 +32,9 @@ import {
   ToggleRight,
   Loader2,
   Ban,
-  Package
+  Package,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 
 interface Category {
@@ -56,75 +58,65 @@ interface ProviderItem {
   is_active: boolean;
   allowed_api: boolean;
   image?: string;
-  availability: string;
+  availability: 'available' | 'out_of_stock' | 'unavailable';
 }
 
 interface Provider {
   id: string;
   name: string;
   code: string;
-  category: string;
-  environment: string;
+  category: 'PREMIUM_APP' | 'GAME_TOPUP' | 'PAYMENT' | 'AI';
+  api_base_url?: string;
+  api_key?: string;
   is_active: boolean;
   is_test_mode?: boolean;
-  api_base_url?: string;
-  credentials_preview?: string;
-  has_credentials?: boolean;
   balance?: number;
   currency?: string;
   health_status?: string;
+  health_message?: string;
   default_category_id?: string | null;
 }
 
-export default function ProvidersPage() {
+export default function AdminProvidersPage() {
   const [activeTab, setActiveTab] = useState<'PREMIUM_APP' | 'GAME_TOPUP' | 'PAYMENT' | 'AI'>('PREMIUM_APP');
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState<string>('');
-  const [loadingProviders, setLoadingProviders] = useState(true);
-
-  // Provider specific details
   const [currentProvider, setCurrentProvider] = useState<Provider | null>(null);
   const [items, setItems] = useState<ProviderItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [defaultCategoryId, setDefaultCategoryId] = useState<string>('');
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [checkingBalance, setCheckingBalance] = useState<boolean>(false);
+  const [savingApiKey, setSavingApiKey] = useState<boolean>(false);
+  const [savingCategory, setSavingCategory] = useState<boolean>(false);
+  const [updatingBulk, setUpdatingBulk] = useState<boolean>(false);
+
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [savingApiKey, setSavingApiKey] = useState(false);
-  const [savingCategory, setSavingCategory] = useState(false);
-
-  // Actions state
-  const [syncing, setSyncing] = useState(false);
-  const [checkingBalance, setCheckingBalance] = useState(false);
-  const [updatingBulk, setUpdatingBulk] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Edit Item Modal
-  const [editingItem, setEditingItem] = useState<ProviderItem | null>(null);
-  const [editPrice, setEditPrice] = useState<number>(0);
-  const [editCategoryId, setEditCategoryId] = useState<string>('');
-  const [savingItem, setSavingItem] = useState(false);
-
-  // Feedback Toast
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const showFeedback = (message: string, type: 'success' | 'error' = 'success') => {
+  const showFeedback = (message: string, type: 'success' | 'error') => {
     setFeedback({ message, type });
     setTimeout(() => setFeedback(null), 4000);
   };
 
-  // 1. Fetch all providers
+  // 1. Load All Providers
   const loadProviders = useCallback(async () => {
-    setLoadingProviders(true);
     try {
+      setLoading(true);
       const res = await fetch('/api/admin/providers');
       const data = await res.json();
-      if (res.ok && data.providers) {
-        setProviders(data.providers);
-        // Find provider matching activeTab
-        const matched = data.providers.filter((p: Provider) => p.category === activeTab);
-        if (matched.length > 0) {
-          const active = matched.find((p: Provider) => p.is_active) || matched[0];
-          setSelectedProviderId(active.id || active.code);
+      if (res.ok && data.success) {
+        const provs: Provider[] = data.providers || [];
+        setProviders(provs);
+
+        const currentCategoryProvs = provs.filter((p) => p.category === activeTab);
+        if (currentCategoryProvs.length > 0) {
+          const activeOne = currentCategoryProvs.find((p) => p.is_active) || currentCategoryProvs[0];
+          setSelectedProviderId(activeOne.id || activeOne.code);
         } else {
           setSelectedProviderId('');
           setCurrentProvider(null);
@@ -132,9 +124,9 @@ export default function ProvidersPage() {
         }
       }
     } catch {
-      showFeedback('ไม่สามารถโหลดรายการ Providers ได้', 'error');
+      showFeedback('ไม่สามารถโหลดข้อมูล Provider ได้', 'error');
     } finally {
-      setLoadingProviders(false);
+      setLoading(false);
     }
   }, [activeTab]);
 
@@ -142,7 +134,7 @@ export default function ProvidersPage() {
     loadProviders();
   }, [loadProviders]);
 
-  // 2. Load selected provider items & data
+  // 2. Load selected provider items & data (from DB only, no mock)
   const loadProviderDetails = useCallback(async (providerId: string) => {
     if (!providerId) return;
     try {
@@ -244,22 +236,24 @@ export default function ProvidersPage() {
     }
   };
 
-  // Sync Products & Stock
+  // Real API Sync (Fetches actual /products from provider API, NO mock)
   const handleSyncProducts = async () => {
     if (!currentProvider) return;
     setSyncing(true);
     try {
-      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`);
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
+        method: 'POST',
+      });
       const data = await res.json();
       if (res.ok && data.success) {
-        setCurrentProvider(data.provider);
-        setItems(data.items || []);
-        showFeedback(`ซิงค์ข้อมูลสินค้าและสต็อกเรียบร้อยแล้ว (${data.items?.length || 0} รายการ)`, 'success');
+        showFeedback(data.message || `ซิงค์สำเร็จ (${data.synced_count} รายการ)`, 'success');
+        // Reload fresh items from DB
+        loadProviderDetails(currentProvider.id || currentProvider.code);
       } else {
-        showFeedback('การซิงค์ข้อมูลล้มเหลว', 'error');
+        showFeedback(data.error || 'การซิงค์ข้อมูลล้มเหลว ตรวจสอบ API Key', 'error');
       }
     } catch {
-      showFeedback('เกิดข้อผิดพลาดในการซิงค์', 'error');
+      showFeedback('เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์', 'error');
     } finally {
       setSyncing(false);
     }
@@ -353,77 +347,86 @@ export default function ProvidersPage() {
     }
   };
 
-  // Save Item Price & Category from Modal
-  const handleSaveItemEdit = async () => {
-    if (!currentProvider || !editingItem) return;
-    setSavingItem(true);
-    try {
-      const updatedItem = {
-        ...editingItem,
-        selling_price: Number(editPrice),
-        category_id: editCategoryId || defaultCategoryId,
-      };
+  // Update item selling price locally & on blur save
+  const handlePriceChange = (code: string, newPriceStr: string) => {
+    const newPrice = parseFloat(newPriceStr) || 0;
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.external_code === code) {
+          const profit = Math.max(0, newPrice - item.cost);
+          const profitMargin = newPrice > 0 ? Math.round((profit / newPrice) * 100) : 0;
+          return { ...item, selling_price: newPrice, profit, profit_margin: profitMargin };
+        }
+        return item;
+      })
+    );
+  };
 
-      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
+  const handlePriceBlur = async (item: ProviderItem) => {
+    if (!currentProvider) return;
+    try {
+      await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          toggle_item_id: updatedItem.external_code,
-          set_active_state: updatedItem.is_active,
-          items: [updatedItem],
+          toggle_item_id: item.external_code,
+          set_active_state: item.is_active,
+          items: [item],
         }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setItems((prev) =>
-          prev.map((i) =>
-            i.external_code === updatedItem.external_code
-              ? {
-                  ...i,
-                  selling_price: editPrice,
-                  profit: Math.max(0, editPrice - i.cost),
-                  profit_margin: editPrice > 0 ? Math.round(((editPrice - i.cost) / editPrice) * 100) : 0,
-                  category_id: editCategoryId,
-                }
-              : i
-          )
-        );
-        showFeedback('บันทึกราคาและหมวดหมู่สินค้าสำเร็จ!', 'success');
-        setEditingItem(null);
-      } else {
-        showFeedback('บันทึกสินค้าไม่สำเร็จ', 'error');
-      }
+      showFeedback(`บันทึกราคาขาย ${item.name} เรียบร้อยแล้ว`, 'success');
     } catch {
-      showFeedback('เกิดข้อผิดพลาดในการบันทึก', 'error');
-    } finally {
-      setSavingItem(false);
+      showFeedback('ไม่สามารถบันทึกราคาขายได้', 'error');
     }
   };
 
-  // Filter items
-  const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return items;
-    return items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.external_code.includes(searchQuery)
+  // Category change for single item
+  const handleItemCategoryChange = async (item: ProviderItem, catId: string) => {
+    if (!currentProvider) return;
+    setItems((prev) =>
+      prev.map((i) => (i.external_code === item.external_code ? { ...i, category_id: catId } : i))
     );
-  }, [items, searchQuery]);
+    try {
+      await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toggle_item_id: item.external_code,
+          set_active_state: item.is_active,
+          items: [{ ...item, category_id: catId }],
+        }),
+      });
+      showFeedback('บันทึกหมวดหมู่ของสินค้าเรียบร้อยแล้ว', 'success');
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการบันทึกหมวดหมู่', 'error');
+    }
+  };
 
-  // Current category providers list
-  const currentCategoryProviders = useMemo(() => {
+  // Filtered Providers by Active System Tab
+  const categoryProviders = useMemo(() => {
     return providers.filter((p) => p.category === activeTab);
   }, [providers, activeTab]);
 
+  // Filtered Items by Search Query
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.toLowerCase();
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        item.external_code.includes(q)
+    );
+  }, [items, searchQuery]);
+
   return (
-    <div className="min-h-screen bg-[#0d1117] text-slate-100 p-4 sm:p-6 lg:p-8 font-sans">
+    <div className="space-y-6 font-sans text-slate-800">
       {/* Toast Feedback */}
       {feedback && (
         <div
-          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
             feedback.type === 'success'
-              ? 'bg-emerald-600 text-white shadow-emerald-900/40'
-              : 'bg-rose-600 text-white shadow-rose-900/40'
+              ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+              : 'bg-rose-600 text-white shadow-rose-600/30'
           }`}
         >
           {feedback.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
@@ -431,508 +434,511 @@ export default function ProvidersPage() {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header & System Tabs */}
-        <div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-                <span>จัดการสินค้าและ API ผู้ให้บริการ</span>
-              </h1>
-              <p className="text-sm text-slate-400 mt-1 flex items-center gap-2">
-                <span>Sync สินค้าจาก API ผู้ให้บริการ และตั้งค่าราคาขายหน้าร้านอัตโนมัติ</span>
-                <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-slate-600" />
-                <span className="text-sky-400 font-medium">⚡ ระบบอนุญาตให้เปิดใช้งานได้ 1 ผู้ให้บริการหลักต่อระบบ</span>
-              </p>
-            </div>
-
-            {/* System Category Tabs */}
-            <div className="flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl overflow-x-auto scrollbar-none">
-              <button
-                onClick={() => handleTabChange('PREMIUM_APP')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'PREMIUM_APP'
-                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                <Smartphone className="w-4 h-4" />
-                <span>แอพพรีเมี่ยม</span>
-              </button>
-              <button
-                onClick={() => handleTabChange('GAME_TOPUP')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'GAME_TOPUP'
-                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                <Gamepad2 className="w-4 h-4" />
-                <span>เติมเกม</span>
-              </button>
-              <button
-                onClick={() => handleTabChange('PAYMENT')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'PAYMENT'
-                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                <CreditCard className="w-4 h-4" />
-                <span>ระบบชำระเงิน</span>
-              </button>
-              <button
-                onClick={() => handleTabChange('AI')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
-                  activeTab === 'AI'
-                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                <Bot className="w-4 h-4" />
-                <span>AI Gateway</span>
-              </button>
-            </div>
+      {/* Header & Clean Sky Blue / White System Navigation */}
+      <div className="bg-white rounded-2xl border border-sky-100 shadow-sm p-5 sm:p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-sky-100 pb-5">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
+              <span>จัดการสินค้าและ API ผู้ให้บริการ</span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200">
+                NayMos Realtime
+              </span>
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              เชื่อมต่อ API ซิงค์ราคาต้นทุน สต็อกจริง และเลือกเปิดขายสินค้ารายชิ้นสู่หน้าร้านได้ทันที
+            </p>
           </div>
 
-          {/* Provider Selection Tabs within the Active System */}
-          <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            <span className="text-xs font-semibold text-slate-400 mr-2 shrink-0">ผู้ให้บริการ:</span>
-            {currentCategoryProviders.map((prov) => {
-              const isSelected = selectedProviderId === prov.id || selectedProviderId === prov.code;
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadProviders}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-sky-200 hover:bg-sky-50 hover:text-sky-600 transition shadow-xs"
+              title="รีเฟรชข้อมูลระบบ"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-sky-500" />
+              <span>รีเฟรชหน้า</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 4 System Category Tabs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-5">
+          <button
+            onClick={() => handleTabChange('PREMIUM_APP')}
+            className={`flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-sm font-bold transition-all border ${
+              activeTab === 'PREMIUM_APP'
+                ? 'bg-sky-500 text-white border-sky-500 shadow-md shadow-sky-500/20'
+                : 'bg-white text-slate-600 border-sky-100 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50/50'
+            }`}
+          >
+            <Smartphone className="w-4 h-4" />
+            <span>แอพพรีเมี่ยม</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('GAME_TOPUP')}
+            className={`flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-sm font-bold transition-all border ${
+              activeTab === 'GAME_TOPUP'
+                ? 'bg-sky-500 text-white border-sky-500 shadow-md shadow-sky-500/20'
+                : 'bg-white text-slate-600 border-sky-100 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50/50'
+            }`}
+          >
+            <Gamepad2 className="w-4 h-4" />
+            <span>เติมเกม</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('PAYMENT')}
+            className={`flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-sm font-bold transition-all border ${
+              activeTab === 'PAYMENT'
+                ? 'bg-sky-500 text-white border-sky-500 shadow-md shadow-sky-500/20'
+                : 'bg-white text-slate-600 border-sky-100 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50/50'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>ระบบชำระเงิน</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('AI')}
+            className={`flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-sm font-bold transition-all border ${
+              activeTab === 'AI'
+                ? 'bg-sky-500 text-white border-sky-500 shadow-md shadow-sky-500/20'
+                : 'bg-white text-slate-600 border-sky-100 hover:border-sky-300 hover:text-sky-600 hover:bg-sky-50/50'
+            }`}
+          >
+            <Bot className="w-4 h-4" />
+            <span>ระบบ AI</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Provider Selector for this category */}
+      <div className="bg-white rounded-2xl border border-sky-100 shadow-sm p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Server className="w-4 h-4 text-sky-500" />
+            <h2 className="text-sm font-bold text-slate-800">
+              ผู้ให้บริการในระบบ ({categoryProviders.length} รายการ)
+            </h2>
+            <span className="text-xs text-slate-400">— ระบบอนุญาตเปิดใช้งานได้ 1 รายการหลักต่อหมวด</span>
+          </div>
+        </div>
+
+        {categoryProviders.length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-xs">
+            ไม่พบผู้ให้บริการในหมวดหมู่นี้
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {categoryProviders.map((provider) => {
+              const isSelected = selectedProviderId === provider.id || selectedProviderId === provider.code;
+              const isActive = provider.is_active;
+
               return (
                 <div
-                  key={prov.id || prov.code}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  key={provider.id || provider.code}
+                  onClick={() => setSelectedProviderId(provider.id || provider.code)}
+                  className={`p-4 rounded-xl border text-left cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-slate-800 border-sky-500/80 text-white shadow-xs'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                      ? 'bg-sky-50/60 border-sky-500 shadow-sm'
+                      : 'bg-white border-slate-200 hover:border-sky-300 hover:bg-sky-50/30'
                   }`}
-                  onClick={() => setSelectedProviderId(prov.id || prov.code)}
                 >
-                  <span>{prov.name}</span>
-                  {prov.is_active ? (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      Active (ใช้งานอยู่)
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-base">{provider.name}</span>
+                        {isActive && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span>ใช้งานอยู่</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 font-mono mt-0.5">
+                        รหัส: {provider.code}
+                      </p>
+                    </div>
+
+                    {!isActive && isSelected && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleActivateProvider(provider);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500 text-white hover:bg-sky-600 transition shadow-xs"
+                      >
+                        เปิดใช้งาน
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-sky-100">
+                    <span className="text-slate-500">ยอดเงินในบัญชี:</span>
+                    <span className="font-bold text-slate-800">
+                      ฿{(provider.balance ?? 0).toLocaleString()}
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleActivateProvider(prov);
-                      }}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/60 text-slate-300 hover:bg-sky-600 hover:text-white transition"
-                    >
-                      เลือกใช้นี้
-                    </button>
-                  )}
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Loading state */}
-        {loadingProviders ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
-            <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
-            <span className="text-sm">กำลังโหลดข้อมูลระบบ API...</span>
-          </div>
-        ) : !currentProvider ? (
-          <div className="p-12 text-center bg-slate-900/60 rounded-3xl border border-slate-800">
-            <Server className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-white">ยังไม่มีผู้ให้บริการในระบบนี้</h3>
-            <p className="text-sm text-slate-400 mt-1">กรุณาเพิ่มหรือเปิดใช้งานผู้ให้บริการในหมวดนี้</p>
-          </div>
-        ) : (
-          <>
-            {/* Card 1: API Configuration Card (Matching IMG_8526.png) */}
-            <div className="bg-[#161b22] border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
-              <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between">
+      {/* Main Selected Provider Workspace */}
+      {currentProvider && (
+        <div className="space-y-6">
+          {/* Real-time Balance & Actions Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Real-time Balance Card (Sky Blue Theme) */}
+            <div className="md:col-span-1 bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 text-white rounded-2xl p-5 shadow-sm relative overflow-hidden flex flex-col justify-between">
+              <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-                    <span>จัดการสินค้า {currentProvider.name}</span>
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Sync สินค้าจาก {currentProvider.name} API และตั้งค่าราคา
-                  </p>
-                </div>
-                {currentProvider.is_active && (
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    ผู้ให้บริการหลัก (Active)
+                  <span className="text-xs font-medium text-sky-100 tracking-wide uppercase">
+                    ยอดเงินคงเหลือ (Real-time)
                   </span>
-                )}
-              </div>
-
-              {/* API Key Input Row */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300">API KEY</label>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                  <div className="relative flex-1">
-                    <input
-                      type={showApiKey ? 'text' : 'password'}
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      placeholder={currentProvider.has_credentials ? '••••••••••••••••••••••••••••••••' : 'ใส่ API Key ของคุณที่นี่...'}
-                      className="w-full bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-sky-500 transition pr-10 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
-                    >
-                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                  <div className="text-3xl font-black mt-1 tracking-tight">
+                    ฿{(currentProvider.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveApiKey}
-                    disabled={savingApiKey || !apiKeyInput.trim()}
-                    className="px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white transition flex items-center justify-center gap-2 shadow-xs shrink-0"
-                  >
-                    {savingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    <span>บันทึก</span>
-                  </button>
+                  <div className="text-xs text-sky-100 mt-1 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>ผู้ให้บริการ: {currentProvider.name}</span>
+                  </div>
                 </div>
-              </div>
-
-              {/* Default Category Row */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                  <FolderPlus className="w-4 h-4 text-sky-400" />
-                  <span>หมวดหมู่ default สำหรับสินค้า {currentProvider.name}</span>
-                </div>
-                <p className="text-xs text-slate-400">
-                  สินค้าที่ Sync ใหม่จะถูกจัดอยู่ในหมวดหมู่นี้อัตโนมัติ (สามารถเปลี่ยนได้ทีละตัว)
-                </p>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                  <select
-                    value={defaultCategoryId}
-                    onChange={(e) => setDefaultCategoryId(e.target.value)}
-                    className="flex-1 bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-hidden focus:border-sky-500 transition"
-                  >
-                    <option value="">ไม่มีหมวดหมู่</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleSaveDefaultCategory}
-                    disabled={savingCategory}
-                    className="px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white transition flex items-center justify-center gap-2 shadow-xs shrink-0"
-                  >
-                    {savingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    <span>บันทึก</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* 4 Action Buttons Bar (Exact match to IMG_8526.png) */}
-              <div className="flex flex-wrap items-center gap-2.5 pt-2">
                 <button
-                  type="button"
-                  onClick={handleSyncProducts}
-                  disabled={syncing}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-500 text-white transition shadow-sm"
-                >
-                  <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-                  <span>{syncing ? 'กำลัง Sync...' : 'Sync สินค้าทันที'}</span>
-                </button>
-
-                <button
-                  type="button"
                   onClick={handleCheckBalance}
                   disabled={checkingBalance}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
+                  className="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition backdrop-blur-xs disabled:opacity-50"
+                  title="เช็คยอดเงินสดจาก API"
                 >
-                  <DollarSign className={`w-4 h-4 ${checkingBalance ? 'animate-spin' : 'text-emerald-400'}`} />
-                  <span>เช็คยอดเงิน</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleBulkToggle(true)}
-                  disabled={updatingBulk}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
-                >
-                  <Eye className="w-4 h-4 text-sky-400" />
-                  <span>เปิดทั้งหมด</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleBulkToggle(false)}
-                  disabled={updatingBulk}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
-                >
-                  <EyeOff className="w-4 h-4 text-rose-400" />
-                  <span>ปิดทั้งหมด</span>
+                  <RefreshCw className={`w-4 h-4 ${checkingBalance ? 'animate-spin' : ''}`} />
                 </button>
               </div>
 
-              {/* Card 2: Live Balance Card (Matching IMG_8526.png) */}
-              <div className="bg-[#0d1117] border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="text-xs font-bold text-slate-400 flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-emerald-400" />
-                    ยอดเงิน {currentProvider.name}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">อัปเดตแบบ Real-time</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 py-2 border-t border-slate-800/80">
-                  <div>
-                    <span className="text-xs text-slate-400 block mb-1">Status</span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      success
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 block mb-1">Money</span>
-                    <span className="text-lg sm:text-xl font-extrabold text-white font-mono">
-                      ฿{(currentProvider.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
+              <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between text-xs text-sky-100">
+                <span>สถานะระบบ API</span>
+                <span className="font-semibold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                  {currentProvider.health_status === 'HEALTHY' ? 'ปกติ (พร้อมใช้งาน)' : 'พร้อมเชื่อมต่อ'}
+                </span>
               </div>
             </div>
 
-            {/* Section 3: All Products List (Matching IMG_8526.png) */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
-                  <span>สินค้าทั้งหมด</span>
-                  <span className="text-sm font-bold px-2 py-0.5 rounded-lg bg-slate-800 text-sky-400 border border-slate-700">
-                    {filteredItems.length}
+            {/* API Key & Default Category Configuration Card */}
+            <div className="md:col-span-2 bg-white rounded-2xl border border-sky-100 shadow-sm p-5 flex flex-col justify-between gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* API Key input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-sky-500" />
+                    <span>API Key ({currentProvider.name})</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        placeholder="วาง API Key เพื่อบันทึก..."
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 font-mono placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleSaveApiKey}
+                      disabled={savingApiKey || !apiKeyInput.trim()}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-sky-500 text-white hover:bg-sky-600 transition disabled:opacity-50 shadow-xs shrink-0"
+                    >
+                      {savingApiKey ? 'บันทึก...' : 'บันทึก'}
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    API Key ถูกเข้ารหัสและเก็บรักษาบน Server ฝั่งปลอดภัย
                   </span>
-                </h3>
+                </div>
 
-                {/* Search Bar */}
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                {/* Default Category selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <FolderPlus className="w-3.5 h-3.5 text-sky-500" />
+                    <span>หมวดหมู่เริ่มต้นหน้าร้าน</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={defaultCategoryId}
+                      onChange={(e) => setDefaultCategoryId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                    >
+                      <option value="">-- เลือกหมวดหมู่เริ่มต้น --</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleSaveDefaultCategory}
+                      disabled={savingCategory}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-sky-50 hover:text-sky-600 border border-slate-200 transition disabled:opacity-50 shrink-0"
+                    >
+                      {savingCategory ? '...' : 'ใช้หมวดนี้'}
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    สินค้าที่เปิดใหม่จะถูกจัดเข้าหมวดนี้บนหน้าเว็บ
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons: Sync & Bulk Toggles */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-sky-100">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSyncProducts}
+                    disabled={syncing}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-white hover:bg-sky-600 transition shadow-xs disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                    <span>{syncing ? 'กำลังซิงค์ API...' : 'ซิงค์ข้อมูลจาก API'}</span>
+                  </button>
+                  <span className="text-xs text-slate-500">
+                    มีสินค้าทั้งหมด {items.length} รายการ
+                  </span>
+                </div>
+
+                {items.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleBulkToggle(true)}
+                      disabled={updatingBulk}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>เปิดทั้งหมด</span>
+                    </button>
+                    <button
+                      onClick={() => handleBulkToggle(false)}
+                      disabled={updatingBulk}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition disabled:opacity-50"
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                      <span>ปิดทั้งหมด</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Products List & Management Area (Sky & White High-Contrast) */}
+          <div className="bg-white rounded-2xl border border-sky-100 shadow-sm p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-sky-100">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-sky-500" />
+                <h3 className="font-extrabold text-slate-900 text-lg">
+                  รายการสินค้าจาก API ({filteredItems.length} รายการ)
+                </h3>
+              </div>
+
+              {/* Search in items */}
+              {items.length > 0 && (
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="ค้นหาชื่อสินค้า..."
-                    className="w-full bg-[#161b22] border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-sky-500 transition shadow-2xs"
+                    placeholder="ค้นหาชื่อ หรือ รหัสสินค้า..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                   />
-                </div>
-              </div>
-
-              {/* Items Table / List */}
-              {filteredItems.length === 0 ? (
-                <div className="bg-[#161b22] border border-slate-800 rounded-3xl p-12 text-center text-slate-500">
-                  <Package className="w-12 h-12 mx-auto mb-3 stroke-1 text-slate-600" />
-                  <p className="text-sm font-semibold text-slate-400">ไม่พบสินค้า</p>
-                  <p className="text-xs text-slate-500 mt-1">กดปุ่ม &quot;Sync สินค้าทันที&quot; ด้านบนเพื่อดึงข้อมูลรายการสินค้าจาก API</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredItems.map((item) => {
-                    const isOutOfStock = item.stock <= 0;
-                    return (
-                      <div
-                        key={item.external_code}
-                        className={`bg-[#161b22] border rounded-2xl p-4 sm:p-5 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                          item.is_active
-                            ? 'border-slate-700 hover:border-slate-600'
-                            : 'border-slate-800/80 opacity-75'
-                        }`}
-                      >
-                        {/* Left: Thumbnail & Details */}
-                        <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                          {/* Thumbnail */}
-                          <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale opacity-75' : ''}`}
-                              />
-                            ) : (
-                              <Smartphone className="w-6 h-6 text-slate-500" />
-                            )}
-                          </div>
-
-                          {/* Info */}
-                          <div className="space-y-1 min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="text-sm sm:text-base font-bold text-white truncate">
-                                {item.name}
-                              </h4>
-                              {item.is_active ? (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                  เปิดหน้าเว็บ
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                                  ปิด
-                                </span>
-                              )}
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-800/80 text-slate-400 border border-slate-700">
-                                {currentProvider.code}
-                              </span>
-                            </div>
-
-                            {/* Meta Specs */}
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                              <span>ID: <strong className="text-slate-300 font-mono">{item.external_code}</strong></span>
-                              <span>•</span>
-                              <span>ต้นทุน: <strong className="text-slate-300 font-mono">฿{item.cost}</strong></span>
-                              <span>•</span>
-                              <span>ราคาขาย: <strong className="text-sky-400 font-mono font-bold">฿{item.selling_price}</strong></span>
-                              <span>•</span>
-                              <span>
-                                สต็อก: {isOutOfStock ? (
-                                  <strong className="text-rose-400 font-mono font-bold">0 (หมด)</strong>
-                                ) : (
-                                  <strong className="text-emerald-400 font-mono font-bold">{item.stock}</strong>
-                                )}
-                              </span>
-                            </div>
-
-                            {/* Sub Package Tag Badge */}
-                            <div className="pt-1 flex flex-wrap gap-1.5">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-[#0d1117] border border-slate-800 text-slate-300">
-                                <span>{item.name}</span>
-                                <span className="text-sky-400 font-bold">฿{item.selling_price}</span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Right: Toggle Switch & Edit Button */}
-                        <div className="flex items-center justify-end gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800/80">
-                          {/* Toggle Switch */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleItem(item)}
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                              item.is_active ? 'bg-sky-500' : 'bg-slate-700'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                                item.is_active ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-
-                          {/* Edit Button */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingItem(item);
-                              setEditPrice(item.selling_price);
-                              setEditCategoryId(item.category_id || defaultCategoryId);
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
-                          >
-                            <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />
-                            <span>แก้ไข</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </div>
-          </>
-        )}
-      </div>
 
-      {/* Edit Item Modal */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#161b22] border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-base font-bold text-white">{editingItem.name}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">ตั้งค่าราคาขายหน้าร้านและหมวดหมู่</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Cost & Live Profit Calc */}
-              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-[#0d1117] border border-slate-800 text-xs">
-                <div>
-                  <span className="text-slate-400 block mb-0.5">ต้นทุน API</span>
-                  <span className="text-sm font-bold text-slate-200 font-mono">฿{editingItem.cost}</span>
+            {/* Empty State when no items have been synced from API */}
+            {items.length === 0 ? (
+              <div className="py-16 text-center">
+                <div className="w-16 h-16 rounded-full bg-sky-50 border border-sky-200 text-sky-500 flex items-center justify-center mx-auto mb-4 shadow-xs">
+                  <Package className="w-8 h-8" />
                 </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">กำไรคาดการณ์</span>
-                  <span className="text-sm font-bold text-emerald-400 font-mono">
-                    ฿{Math.max(0, editPrice - editingItem.cost)} ({editPrice > 0 ? Math.round(((editPrice - editingItem.cost) / editPrice) * 100) : 0}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* Selling Price Input */}
-              <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">ราคาขายหน้าร้าน (บาท)</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">฿</span>
-                  <input
-                    type="number"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(Number(e.target.value))}
-                    min={editingItem.cost}
-                    className="w-full bg-[#0d1117] border border-slate-700 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white font-mono focus:outline-hidden focus:border-sky-500 transition"
-                  />
-                </div>
-              </div>
-
-              {/* Category Selector */}
-              <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">หมวดหมู่สำหรับสินค้านี้</label>
-                <select
-                  value={editCategoryId}
-                  onChange={(e) => setEditCategoryId(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-hidden focus:border-sky-500 transition"
+                <h4 className="text-base font-bold text-slate-800 mb-1">
+                  ยังไม่มีรายการสินค้าจาก API นี้
+                </h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mb-6">
+                  กรุณากรอก API Key ด้านบนให้ถูกต้อง แล้วกดปุ่ม &quot;ซิงค์ข้อมูลจาก API&quot; เพื่อดึงรายการสินค้า ราคาต้นทุน และสต็อกสดจริงจากผู้ให้บริการ
+                </p>
+                <button
+                  onClick={handleSyncProducts}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-sky-500 text-white hover:bg-sky-600 transition shadow-md shadow-sky-500/20 disabled:opacity-50"
                 >
-                  <option value="">ไม่มีหมวดหมู่</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                  <span>{syncing ? 'กำลังซิงค์ข้อมูล...' : 'ซิงค์ข้อมูลจาก API ตอนนี้'}</span>
+                </button>
               </div>
-            </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">
+                ไม่พบสินค้าที่ตรงกับคำค้นหา &quot;{searchQuery}&quot;
+              </div>
+            ) : (
+              <div className="divide-y divide-sky-100">
+                {filteredItems.map((item) => {
+                  const isOutOfStock = item.stock <= 0;
+                  const hasProfit = item.profit > 0;
 
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveItemEdit}
-                disabled={savingItem}
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-400 disabled:bg-slate-800 text-white transition flex items-center gap-1.5 shadow-xs"
-              >
-                {savingItem && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>บันทึกการแก้ไข</span>
-              </button>
-            </div>
+                  return (
+                    <div
+                      key={item.external_code}
+                      className={`py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-colors ${
+                        item.is_active ? 'bg-sky-50/20' : ''
+                      }`}
+                    >
+                      {/* Product Info */}
+                      <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                        {/* Thumbnail / Icon */}
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                          {item.image ? (
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <Package className="w-6 h-6 text-slate-400" />
+                          )}
+                        </div>
+
+                        {/* Title & Badges */}
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-slate-900 text-sm truncate">
+                              {item.name}
+                            </h4>
+                            <span className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-sky-50 text-sky-700 border border-sky-200 font-semibold">
+                              รหัส #{item.external_code}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                            {/* Stock status */}
+                            {isOutOfStock ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                                สินค้าหมด (0)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                มีสต็อก ({item.stock.toLocaleString()} ชิ้น)
+                              </span>
+                            )}
+
+                            {/* Category Selector */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400">หมวดหมู่:</span>
+                              <select
+                                value={item.category_id || defaultCategoryId || ''}
+                                onChange={(e) => handleItemCategoryChange(item, e.target.value)}
+                                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-sky-500"
+                              >
+                                {categories.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Pricing, Profit & Storefront Toggle */}
+                      <div className="flex items-center gap-4 sm:gap-6 shrink-0 justify-between lg:justify-end border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100">
+                        {/* Cost (ต้นทุน) */}
+                        <div className="text-right">
+                          <span className="block text-[11px] text-slate-400 font-medium">
+                            ต้นทุน API
+                          </span>
+                          <span className="font-bold text-slate-700 text-sm">
+                            ฿{item.cost.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Selling Price (ราคาขายหน้าร้าน) */}
+                        <div className="text-center">
+                          <span className="block text-[11px] text-slate-400 font-medium mb-0.5">
+                            ราคาขาย
+                          </span>
+                          <div className="relative inline-block">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={item.selling_price || ''}
+                              onChange={(e) => handlePriceChange(item.external_code, e.target.value)}
+                              onBlur={() => handlePriceBlur(item)}
+                              className="w-20 text-center font-bold text-sm bg-white border border-slate-300 rounded-lg py-1 px-2 text-slate-900 focus:outline-hidden focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                            />
+                            <span className="text-[10px] text-slate-400 absolute right-1.5 top-1.5 pointer-events-none">
+                              ฿
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Profit (กำไร) */}
+                        <div className="text-right min-w-[70px]">
+                          <span className="block text-[11px] text-slate-400 font-medium">
+                            กำไร
+                          </span>
+                          <span
+                            className={`inline-block text-xs font-bold px-2 py-0.5 rounded-md border ${
+                              hasProfit
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}
+                          >
+                            +฿{item.profit.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Toggle On/Off for Storefront */}
+                        <div className="flex flex-col items-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleItem(item)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs ${
+                              item.is_active
+                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-emerald-500/20'
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            {item.is_active ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-white" />
+                                <span>เปิดหน้าร้าน</span>
+                              </>
+                            ) : (
+                              <>
+                                <Ban className="w-3.5 h-3.5 text-slate-400" />
+                                <span>ปิดหน้าร้าน</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
