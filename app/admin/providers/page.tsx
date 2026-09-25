@@ -310,6 +310,32 @@ export default function AdminProvidersPage() {
   };
 
   // Batch activate all items
+    // Push / Import products to storefront
+  const [pushingToStore, setPushingToStore] = useState(false);
+  const handlePushToStorefront = async () => {
+    if (!detailProvider) return;
+    setPushingToStore(true);
+    try {
+      const res = await fetch(`/api/admin/providers/${detailProvider.id}/items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ push_to_storefront: true, items }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showFeedback(data.message || 'ดึงสินค้าเข้าสู่หน้าเว็บสำเร็จ!', 'success');
+        // Refresh items
+        openDetailModal(detailProvider);
+      } else {
+        showFeedback(data.error || 'เกิดข้อผิดพลาดในการดึงสินค้าเข้าหน้าเว็บ', 'error');
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+    } finally {
+      setPushingToStore(false);
+    }
+  };
+
   const handleEnableAllItems = async () => {
     if (!detailProvider) return;
     setSavingPrices(true);
