@@ -1,15 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Layers,
   Key,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  Plus,
   Trash2,
-  Settings,
   ExternalLink,
   ShieldCheck,
   Server,
@@ -26,20 +24,39 @@ import {
   Gamepad2,
   Smartphone,
   CreditCard,
-  Bot
+  Bot,
+  Eye,
+  EyeOff,
+  FolderPlus,
+  ToggleLeft,
+  ToggleRight,
+  Loader2,
+  Ban,
+  Package
 } from 'lucide-react';
+
+interface Category {
+  id: string;
+  name: string;
+  slug?: string;
+}
 
 interface ProviderItem {
   id: string;
   name: string;
+  external_code: string;
   category: string;
-  external_id?: string;
+  category_id?: string | null;
+  duration?: string;
   cost: number;
   selling_price: number;
   profit: number;
-  margin_percent: number;
+  profit_margin: number;
+  stock: number;
   is_active: boolean;
-  is_provider_active?: boolean;
+  allowed_api: boolean;
+  image?: string;
+  availability: string;
 }
 
 interface Provider {
@@ -51,928 +68,871 @@ interface Provider {
   is_active: boolean;
   is_test_mode?: boolean;
   api_base_url?: string;
-  has_credentials?: boolean;
   credentials_preview?: string;
-  supported_games?: string[];
-  items?: ProviderItem[];
+  has_credentials?: boolean;
+  balance?: number;
+  currency?: string;
+  health_status?: string;
+  default_category_id?: string | null;
 }
 
-const CATEGORY_TABS = [
-  { id: 'ALL', label: 'ทั้งหมด', icon: Layers },
-  { id: 'GAME_TOPUP', label: '🎮 ระบบเติมเกม', icon: Gamepad2, desc: 'API เติมเงินและไอเทมเกมออนไลน์อัตโนมัติ' },
-  { id: 'PREMIUM_APP', label: '📱 ระบบแอพพรีเมียม', icon: Smartphone, desc: 'API สั่งซื้อแอพรายเดือน แอพสตรีมมิ่ง และบัญชีดิจิทัล' },
-  { id: 'PAYMENT', label: '💳 ระบบชำระเงิน', icon: CreditCard, desc: 'API จัดการคิวอาร์โค้ด พร้อมเพย์ และการรับชำระเงิน' },
-  { id: 'AI', label: '🤖 ระบบ AI ผู้ช่วย', icon: Bot, desc: 'API ปัญญาประดิษฐ์ บอทแชท และโมเดลภาษา' },
-];
+export default function ProvidersPage() {
+  const [activeTab, setActiveTab] = useState<'PREMIUM_APP' | 'GAME_TOPUP' | 'PAYMENT' | 'AI'>('PREMIUM_APP');
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<string>('');
+  const [loadingProviders, setLoadingProviders] = useState(true);
 
-const FALLBACK_PROVIDERS: Provider[] = [
-  {
-    id: 'finshop',
-    name: 'FinShop API (ระบบเติมเกม & สินค้าดิจิทัล)',
-    code: 'finshop',
-    category: 'GAME_TOPUP',
-    environment: 'production',
-    is_active: true,
-    api_base_url: 'https://api.finshop.in.th/v1',
-    credentials_preview: 'fin_live_••••••••',
-    has_credentials: true,
-    supported_games: ['Free Fire', 'RoV', 'Mobile Legends', 'Valorant', 'Genshin Impact', 'PUBG Mobile', 'YouTube Premium', 'Netflix'],
-    items: [
-      { id: 'fs-ff', name: 'Free Fire (เพชรฟรอยด์)', category: 'GAME_TOPUP', cost: 26, selling_price: 29, profit: 3, margin_percent: 10.3, is_active: true },
-      { id: 'fs-rov', name: 'RoV (คูปอง)', category: 'GAME_TOPUP', cost: 31, selling_price: 35, profit: 4, margin_percent: 11.4, is_active: true },
-      { id: 'fs-ml', name: 'Mobile Legends (Diamonds)', category: 'GAME_TOPUP', cost: 25, selling_price: 29, profit: 4, margin_percent: 13.7, is_active: true },
-      { id: 'fs-val', name: 'Valorant (VP Points)', category: 'GAME_TOPUP', cost: 142, selling_price: 159, profit: 17, margin_percent: 10.6, is_active: true },
-      { id: 'fs-gi', name: 'Genshin Impact (Crystals)', category: 'GAME_TOPUP', cost: 30, selling_price: 35, profit: 5, margin_percent: 14.2, is_active: true },
-      { id: 'fs-pubg', name: 'PUBG Mobile (UC)', category: 'GAME_TOPUP', cost: 25, selling_price: 29, profit: 4, margin_percent: 13.7, is_active: true },
-      { id: 'fs-yt', name: 'YouTube Premium (30 วัน)', category: 'PREMIUM_APP', cost: 45, selling_price: 69, profit: 24, margin_percent: 34.7, is_active: true },
-    ]
-  },
-  {
-    id: 'byshop',
-    name: 'ByShop API (ระบบเติมเกมสำรอง)',
-    code: 'byshop',
-    category: 'GAME_TOPUP',
-    environment: 'sandbox',
-    is_active: false,
-    api_base_url: 'https://api.byshop.me/api/v2',
-    credentials_preview: 'by_sb_••••••••',
-    has_credentials: false,
-    supported_games: ['Free Fire', 'RoV', 'PUBG Mobile', 'Roblox'],
-    items: [
-      { id: 'by-ff', name: 'Free Fire', category: 'GAME_TOPUP', cost: 27, selling_price: 29, profit: 2, margin_percent: 6.8, is_active: false },
-      { id: 'by-rov', name: 'RoV คูปอง', category: 'GAME_TOPUP', cost: 32, selling_price: 35, profit: 3, margin_percent: 8.5, is_active: false },
-    ]
-  },
-  {
-    id: 'mock-digital',
-    name: 'Sandbox Digital Goods (แอพพรีเมียมทดลอง)',
-    code: 'mock_digital',
-    category: 'PREMIUM_APP',
-    environment: 'sandbox',
-    is_active: true,
-    api_base_url: 'https://sandbox.naymos.local/apps',
-    credentials_preview: 'app_sb_••••••••',
-    has_credentials: true,
-    supported_games: ['Spotify Premium', 'Netflix 4K', 'YouTube Premium', 'Disney+ Hotstar', 'Canva Pro'],
-    items: [
-      { id: 'app-spot', name: 'Spotify Premium Family 30 วัน', category: 'PREMIUM_APP', cost: 35, selling_price: 59, profit: 24, margin_percent: 40.6, is_active: true },
-      { id: 'app-net', name: 'Netflix 4K UHD 30 วัน (จอส่วนตัว)', category: 'PREMIUM_APP', cost: 95, selling_price: 139, profit: 44, margin_percent: 31.6, is_active: true },
-      { id: 'app-yt', name: 'YouTube Premium 30 วัน (เมลตัวเอง)', category: 'PREMIUM_APP', cost: 39, selling_price: 65, profit: 26, margin_percent: 40.0, is_active: true },
-      { id: 'app-canva', name: 'Canva Pro 1 ปี (บัญชีเพื่อการศึกษา/ทีม)', category: 'PREMIUM_APP', cost: 50, selling_price: 99, profit: 49, margin_percent: 49.4, is_active: true },
-    ]
-  },
-  {
-    id: 'promptpay',
-    name: 'PromptPay EMVCo (ระบบรับชำระเงินคิวอาร์)',
-    code: 'promptpay',
-    category: 'PAYMENT',
-    environment: 'production',
-    is_active: true,
-    api_base_url: 'https://promptpay.io/api',
-    credentials_preview: 'PP_ID: 0988251064',
-    has_credentials: true,
-    supported_games: ['สแกน PromptPay QR ทุกธนาคารในไทย', 'TrueMoney Wallet Transfer'],
-    items: []
-  },
-  {
-    id: 'ai-gateway',
-    name: 'AI Multi-Provider (ระบบผู้ช่วยและบอทบริการลูกค้า)',
-    code: 'ai_gateway',
-    category: 'AI',
-    environment: 'production',
-    is_active: true,
-    api_base_url: 'https://generativelanguage.googleapis.com',
-    credentials_preview: 'AIzaSy••••••••',
-    has_credentials: true,
-    supported_games: ['Google Gemini 1.5 Flash', 'OpenAI GPT-4o Mini', 'Groq Llama 3 Fast Inference'],
-    items: []
-  }
-];
-
-export default function AdminProvidersPage() {
-  const [providers, setProviders] = useState<Provider[]>(FALLBACK_PROVIDERS);
-  const [activeTab, setActiveTab] = useState('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  // Modal States
-  const [detailProvider, setDetailProvider] = useState<Provider | null>(null);
+  // Provider specific details
+  const [currentProvider, setCurrentProvider] = useState<Provider | null>(null);
   const [items, setItems] = useState<ProviderItem[]>([]);
-  const [loadingItems, setLoadingItems] = useState(false);
-  const [savingPrices, setSavingPrices] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [defaultCategoryId, setDefaultCategoryId] = useState<string>('');
+  const [apiKeyInput, setApiKeyInput] = useState<string>('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [savingApiKey, setSavingApiKey] = useState(false);
+  const [savingCategory, setSavingCategory] = useState(false);
 
-  // Edit Provider Config Modal
-  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    category: 'GAME_TOPUP',
-    environment: 'sandbox',
-    api_base_url: '',
-    api_key: '',
-    api_secret: '',
-    is_active: true,
-  });
-  const [savingConfig, setSavingConfig] = useState(false);
+  // Actions state
+  const [syncing, setSyncing] = useState(false);
+  const [checkingBalance, setCheckingBalance] = useState(false);
+  const [updatingBulk, setUpdatingBulk] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Load Providers
-  const fetchProviders = async () => {
-    setLoading(true);
+  // Edit Item Modal
+  const [editingItem, setEditingItem] = useState<ProviderItem | null>(null);
+  const [editPrice, setEditPrice] = useState<number>(0);
+  const [editCategoryId, setEditCategoryId] = useState<string>('');
+  const [savingItem, setSavingItem] = useState(false);
+
+  // Feedback Toast
+  const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showFeedback = (message: string, type: 'success' | 'error' = 'success') => {
+    setFeedback({ message, type });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // 1. Fetch all providers
+  const loadProviders = useCallback(async () => {
+    setLoadingProviders(true);
     try {
       const res = await fetch('/api/admin/providers');
       const data = await res.json();
-      if (data.providers && Array.isArray(data.providers) && data.providers.length > 0) {
-        // Merge DB providers with metadata
-        const merged = data.providers.map((p: any) => {
-          const fallback = FALLBACK_PROVIDERS.find(f => f.code === p.code || f.id === p.id);
-          return {
-            ...p,
-            supported_games: p.supported_games || fallback?.supported_games || [],
-            items: p.items || fallback?.items || [],
-          };
-        });
-        setProviders(merged);
-      } else {
-        setProviders(FALLBACK_PROVIDERS);
+      if (res.ok && data.providers) {
+        setProviders(data.providers);
+        // Find provider matching activeTab
+        const matched = data.providers.filter((p: Provider) => p.category === activeTab);
+        if (matched.length > 0) {
+          const active = matched.find((p: Provider) => p.is_active) || matched[0];
+          setSelectedProviderId(active.id || active.code);
+        } else {
+          setSelectedProviderId('');
+          setCurrentProvider(null);
+          setItems([]);
+        }
       }
     } catch {
-      setProviders(FALLBACK_PROVIDERS);
+      showFeedback('ไม่สามารถโหลดรายการ Providers ได้', 'error');
     } finally {
-      setLoading(false);
+      setLoadingProviders(false);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
-    fetchProviders();
-  }, []);
+    loadProviders();
+  }, [loadProviders]);
 
-  // Filtered Providers
-  const filteredProviders = useMemo(() => {
-    return providers.filter(p => {
-      const matchTab = activeTab === 'ALL' || p.category === activeTab;
-      const matchSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.supported_games && p.supported_games.some(g => g.toLowerCase().includes(searchQuery.toLowerCase())));
-      return matchTab && matchSearch;
-    });
-  }, [providers, activeTab, searchQuery]);
-
-  // Open Details Modal
-  const openDetailModal = async (provider: Provider) => {
-    setDetailProvider(provider);
-    setLoadingItems(true);
+  // 2. Load selected provider items & data
+  const loadProviderDetails = useCallback(async (providerId: string) => {
+    if (!providerId) return;
     try {
-      const res = await fetch(`/api/admin/providers/${provider.id}/items`);
+      const res = await fetch(`/api/admin/providers/${providerId}/items`);
       const data = await res.json();
-      if (data.items && data.items.length > 0) {
-        setItems(data.items);
-      } else if (provider.items && provider.items.length > 0) {
-        setItems(provider.items);
-      } else {
-        const fb = FALLBACK_PROVIDERS.find(f => f.id === provider.id || f.code === provider.code);
-        setItems(fb?.items || []);
+      if (res.ok && data.success) {
+        setCurrentProvider(data.provider);
+        setItems(data.items || []);
+        setCategories(data.categories || []);
+        setDefaultCategoryId(data.provider.default_category_id || data.categories?.[0]?.id || '');
       }
     } catch {
-      const fb = FALLBACK_PROVIDERS.find(f => f.id === provider.id || f.code === provider.code);
-      setItems(fb?.items || []);
-    } finally {
-      setLoadingItems(false);
+      showFeedback('ไม่สามารถโหลดข้อมูลสินค้าของ Provider ได้', 'error');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedProviderId) {
+      loadProviderDetails(selectedProviderId);
+    }
+  }, [selectedProviderId, loadProviderDetails]);
+
+  // Handle Tab Switch
+  const handleTabChange = (tab: 'PREMIUM_APP' | 'GAME_TOPUP' | 'PAYMENT' | 'AI') => {
+    setActiveTab(tab);
+    const matched = providers.filter((p) => p.category === tab);
+    if (matched.length > 0) {
+      const active = matched.find((p) => p.is_active) || matched[0];
+      setSelectedProviderId(active.id || active.code);
+    } else {
+      setSelectedProviderId('');
+      setCurrentProvider(null);
+      setItems([]);
     }
   };
 
-  // Open Edit Config Modal
-  const openEditModal = (provider: Provider) => {
-    setEditingProvider(provider);
-    setEditForm({
-      name: provider.name,
-      category: provider.category || 'GAME_TOPUP',
-      environment: provider.environment || 'sandbox',
-      api_base_url: provider.api_base_url || '',
-      api_key: '',
-      api_secret: '',
-      is_active: provider.is_active,
-    });
-  };
-
-  // Save Provider Config
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProvider) return;
-    setSavingConfig(true);
+  // Activate Provider (Enforce 1 Active Provider per category)
+  const handleActivateProvider = async (provider: Provider) => {
     try {
-      const payload: any = {
-        name: editForm.name,
-        category: editForm.category,
-        environment: editForm.environment,
-        api_base_url: editForm.api_base_url,
-        is_active: editForm.is_active,
-      };
-      if (editForm.api_key.trim()) payload.api_key = editForm.api_key.trim();
-      if (editForm.api_secret.trim()) payload.api_secret = editForm.api_secret.trim();
-
-      const res = await fetch(`/api/admin/providers/${editingProvider.id}`, {
+      const res = await fetch(`/api/admin/providers/${provider.id || provider.code}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ is_active: true, category: provider.category }),
       });
-
-      const resData = await res.json();
-      if (!res.ok || resData.error) {
-        throw new Error(resData.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      if (res.ok) {
+        showFeedback(`เปิดใช้งาน ${provider.name} เป็นผู้ให้บริการหลักของระบบนี้แล้ว`, 'success');
+        loadProviders();
+      } else {
+        showFeedback('ไม่สามารถตั้งค่าผู้ให้บริการได้', 'error');
       }
-
-      setNotification({ type: 'success', message: 'บันทึกการตั้งค่า API สำเร็จเรียบร้อยแล้ว' });
-      setEditingProvider(null);
-      fetchProviders();
-    } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'เกิดข้อผิดพลาดในการบันทึก' });
-    } finally {
-      setSavingConfig(false);
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
     }
   };
 
-  // Update item price or active state in modal
-  const handleItemChange = (itemId: string, field: 'selling_price' | 'is_active', val: any) => {
-    setItems(prev =>
-      prev.map(it => {
-        if (it.id !== itemId) return it;
-        const updated = { ...it, [field]: val };
-        if (field === 'selling_price') {
-          const numPrice = Number(val) || 0;
-          updated.selling_price = numPrice;
-          updated.profit = Math.round((numPrice - updated.cost) * 100) / 100;
-          updated.margin_percent = numPrice > 0 ? Math.round(((numPrice - updated.cost) / numPrice) * 1000) / 10 : 0;
-        }
-        return updated;
-      })
-    );
-  };
-
-  // Batch activate all items
-    // Push / Import products to storefront
-  const [pushingToStore, setPushingToStore] = useState(false);
-  const handlePushToStorefront = async () => {
-    if (!detailProvider) return;
-    setPushingToStore(true);
+  // Save API Key
+  const handleSaveApiKey = async () => {
+    if (!currentProvider || !apiKeyInput.trim()) return;
+    setSavingApiKey(true);
     try {
-      const res = await fetch(`/api/admin/providers/${detailProvider.id}/items`, {
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ push_to_storefront: true, items }),
+        body: JSON.stringify({ api_key: apiKeyInput.trim() }),
+      });
+      if (res.ok) {
+        showFeedback('บันทึก API Key สำเร็จ!', 'success');
+        setApiKeyInput('');
+        loadProviderDetails(currentProvider.id || currentProvider.code);
+      } else {
+        showFeedback('บันทึก API Key ล้มเหลว', 'error');
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    } finally {
+      setSavingApiKey(false);
+    }
+  };
+
+  // Save Default Category
+  const handleSaveDefaultCategory = async () => {
+    if (!currentProvider) return;
+    setSavingCategory(true);
+    try {
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_category_id: defaultCategoryId }),
+      });
+      if (res.ok) {
+        showFeedback('บันทึกหมวดหมู่เริ่มต้นเรียบร้อยแล้ว!', 'success');
+      } else {
+        showFeedback('บันทึกหมวดหมู่ไม่สำเร็จ', 'error');
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  // Sync Products & Stock
+  const handleSyncProducts = async () => {
+    if (!currentProvider) return;
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCurrentProvider(data.provider);
+        setItems(data.items || []);
+        showFeedback(`ซิงค์ข้อมูลสินค้าและสต็อกเรียบร้อยแล้ว (${data.items?.length || 0} รายการ)`, 'success');
+      } else {
+        showFeedback('การซิงค์ข้อมูลล้มเหลว', 'error');
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการซิงค์', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Real-time Balance Check
+  const handleCheckBalance = async () => {
+    if (!currentProvider) return;
+    setCheckingBalance(true);
+    try {
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCurrentProvider(data.provider);
+        showFeedback(`อัปเดตยอดเงินสดสำเร็จ: ฿${(data.provider.balance || 0).toLocaleString()}`, 'success');
+      } else {
+        showFeedback('ไม่สามารถตรวจสอบยอดเงินได้', 'error');
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการตรวจสอบยอดเงิน', 'error');
+    } finally {
+      setCheckingBalance(false);
+    }
+  };
+
+  // Toggle Single Item (Send to storefront or hide)
+  const handleToggleItem = async (item: ProviderItem) => {
+    if (!currentProvider) return;
+    const nextState = !item.is_active;
+
+    // Optimistic UI update
+    setItems((prev) =>
+      prev.map((i) => (i.external_code === item.external_code ? { ...i, is_active: nextState } : i))
+    );
+
+    try {
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toggle_item_id: item.external_code,
+          set_active_state: nextState,
+          items: [{ ...item, is_active: nextState, category_id: item.category_id || defaultCategoryId }],
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        showFeedback(data.message || 'ดึงสินค้าเข้าสู่หน้าเว็บสำเร็จ!', 'success');
-        // Refresh items
-        openDetailModal(detailProvider);
+        showFeedback(data.message, 'success');
       } else {
-        showFeedback(data.error || 'เกิดข้อผิดพลาดในการดึงสินค้าเข้าหน้าเว็บ', 'error');
+        // Rollback
+        setItems((prev) =>
+          prev.map((i) => (i.external_code === item.external_code ? { ...i, is_active: !nextState } : i))
+        );
+        showFeedback('เกิดข้อผิดพลาดในการอัปเดตสถานะสินค้า', 'error');
+      }
+    } catch {
+      // Rollback
+      setItems((prev) =>
+        prev.map((i) => (i.external_code === item.external_code ? { ...i, is_active: !nextState } : i))
+      );
+      showFeedback('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+    }
+  };
+
+  // Bulk Enable All / Disable All
+  const handleBulkToggle = async (enable: boolean) => {
+    if (!currentProvider || items.length === 0) return;
+    setUpdatingBulk(true);
+    try {
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enable_all: enable,
+          disable_all: !enable,
+          default_category_id: defaultCategoryId,
+          items: items.map((i) => ({ ...i, is_active: enable, category_id: i.category_id || defaultCategoryId })),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setItems((prev) => prev.map((i) => ({ ...i, is_active: enable })));
+        showFeedback(data.message, 'success');
+      } else {
+        showFeedback('เกิดข้อผิดพลาดในการตั้งค่าทั้งหมด', 'error');
       }
     } catch {
       showFeedback('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
     } finally {
-      setPushingToStore(false);
+      setUpdatingBulk(false);
     }
   };
 
-  const handleEnableAllItems = async () => {
-    if (!detailProvider) return;
-    setSavingPrices(true);
+  // Save Item Price & Category from Modal
+  const handleSaveItemEdit = async () => {
+    if (!currentProvider || !editingItem) return;
+    setSavingItem(true);
     try {
-      setItems(prev => prev.map(it => ({ ...it, is_active: true })));
-      const res = await fetch(`/api/admin/providers/${detailProvider.id}/items`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable_all: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'เปิดใช้งานไม่สำเร็จ');
-      setNotification({ type: 'success', message: 'เปิดใช้งาน API กับสินค้าทั้งหมดของเจ้านี้เรียบร้อยแล้ว!' });
-    } catch (err: any) {
-      setNotification({ type: 'error', message: err.message });
-    } finally {
-      setSavingPrices(false);
-    }
-  };
-
-  // Save Prices & Statuses
-  const handleSaveItems = async () => {
-    if (!detailProvider) return;
-    setSavingPrices(true);
-    try {
-      const payload = {
-        items: items.map(it => ({
-          id: it.id,
-          selling_price: it.selling_price,
-          is_active: it.is_active,
-        })),
+      const updatedItem = {
+        ...editingItem,
+        selling_price: Number(editPrice),
+        category_id: editCategoryId || defaultCategoryId,
       };
-      const res = await fetch(`/api/admin/providers/${detailProvider.id}/items`, {
+
+      const res = await fetch(`/api/admin/providers/${currentProvider.id || currentProvider.code}/items`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          toggle_item_id: updatedItem.external_code,
+          set_active_state: updatedItem.is_active,
+          items: [updatedItem],
+        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'บันทึกราคาไม่สำเร็จ');
-      setNotification({ type: 'success', message: 'บันทึกการตั้งค่าราคาขายและสถานะสินค้าเรียบร้อยแล้ว' });
-      setDetailProvider(null);
-    } catch (err: any) {
-      setNotification({ type: 'error', message: err.message });
+      if (res.ok && data.success) {
+        setItems((prev) =>
+          prev.map((i) =>
+            i.external_code === updatedItem.external_code
+              ? {
+                  ...i,
+                  selling_price: editPrice,
+                  profit: Math.max(0, editPrice - i.cost),
+                  profit_margin: editPrice > 0 ? Math.round(((editPrice - i.cost) / editPrice) * 100) : 0,
+                  category_id: editCategoryId,
+                }
+              : i
+          )
+        );
+        showFeedback('บันทึกราคาและหมวดหมู่สินค้าสำเร็จ!', 'success');
+        setEditingItem(null);
+      } else {
+        showFeedback('บันทึกสินค้าไม่สำเร็จ', 'error');
+      }
+    } catch {
+      showFeedback('เกิดข้อผิดพลาดในการบันทึก', 'error');
     } finally {
-      setSavingPrices(false);
+      setSavingItem(false);
     }
   };
+
+  // Filter items
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.external_code.includes(searchQuery)
+    );
+  }, [items, searchQuery]);
+
+  // Current category providers list
+  const currentCategoryProviders = useMemo(() => {
+    return providers.filter((p) => p.category === activeTab);
+  }, [providers, activeTab]);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 pb-16 font-sans">
-      {/* Top Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#0d1117] text-slate-100 p-4 sm:p-6 lg:p-8 font-sans">
+      {/* Toast Feedback */}
+      {feedback && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
+            feedback.type === 'success'
+              ? 'bg-emerald-600 text-white shadow-emerald-900/40'
+              : 'bg-rose-600 text-white shadow-rose-900/40'
+          }`}
+        >
+          {feedback.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
+          <span>{feedback.message}</span>
+        </div>
+      )}
+
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header & System Tabs */}
+        <div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center p-2 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
-                  <Server className="w-5 h-5" />
-                </span>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-                  ศูนย์ควบคุม API & Providers
-                </h1>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                จัดการ API เติมเกม แอพพรีเมียม ระบบชำระเงิน และกำหนดราคาขายพร้อมกำไรแบบเรียลไทม์
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                <span>จัดการสินค้าและ API ผู้ให้บริการ</span>
+              </h1>
+              <p className="text-sm text-slate-400 mt-1 flex items-center gap-2">
+                <span>Sync สินค้าจาก API ผู้ให้บริการ และตั้งค่าราคาขายหน้าร้านอัตโนมัติ</span>
+                <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-slate-600" />
+                <span className="text-sky-400 font-medium">⚡ ระบบอนุญาตให้เปิดใช้งานได้ 1 ผู้ให้บริการหลักต่อระบบ</span>
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            {/* System Category Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl overflow-x-auto scrollbar-none">
               <button
-                onClick={fetchProviders}
-                disabled={loading}
-                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                onClick={() => handleTabChange('PREMIUM_APP')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  activeTab === 'PREMIUM_APP'
+                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-sky-600' : ''}`} />
-                รีเฟรช
+                <Smartphone className="w-4 h-4" />
+                <span>แอพพรีเมี่ยม</span>
               </button>
               <button
-                onClick={() => {
-                  setEditingProvider({
-                    id: 'new',
-                    name: '',
-                    code: '',
-                    category: 'GAME_TOPUP',
-                    environment: 'sandbox',
-                    is_active: true,
-                  });
-                  setEditForm({
-                    name: '',
-                    category: 'GAME_TOPUP',
-                    environment: 'sandbox',
-                    api_base_url: '',
-                    api_key: '',
-                    api_secret: '',
-                    is_active: true,
-                  });
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-sm transition"
+                onClick={() => handleTabChange('GAME_TOPUP')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  activeTab === 'GAME_TOPUP'
+                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
               >
-                <Plus className="w-4 h-4" />
-                เพิ่ม Provider ใหม่
+                <Gamepad2 className="w-4 h-4" />
+                <span>เติมเกม</span>
+              </button>
+              <button
+                onClick={() => handleTabChange('PAYMENT')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  activeTab === 'PAYMENT'
+                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>ระบบชำระเงิน</span>
+              </button>
+              <button
+                onClick={() => handleTabChange('AI')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                  activeTab === 'AI'
+                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <Bot className="w-4 h-4" />
+                <span>AI Gateway</span>
               </button>
             </div>
           </div>
 
-          {/* Category Tabs */}
-          <div className="flex items-center gap-2 mt-5 overflow-x-auto pb-1 scrollbar-none border-t border-slate-100 pt-3">
-            {CATEGORY_TABS.map(tab => {
-              const TabIcon = tab.icon;
-              const isActive = activeTab === tab.id;
+          {/* Provider Selection Tabs within the Active System */}
+          <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-xs font-semibold text-slate-400 mr-2 shrink-0">ผู้ให้บริการ:</span>
+            {currentCategoryProviders.map((prov) => {
+              const isSelected = selectedProviderId === prov.id || selectedProviderId === prov.code;
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
-                    isActive
-                      ? 'bg-sky-600 text-white shadow-xs'
-                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                <div
+                  key={prov.id || prov.code}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-slate-800 border-sky-500/80 text-white shadow-xs'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
                   }`}
+                  onClick={() => setSelectedProviderId(prov.id || prov.code)}
                 >
-                  <TabIcon className="w-4 h-4" />
-                  {tab.label}
-                </button>
+                  <span>{prov.name}</span>
+                  {prov.is_active ? (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      Active (ใช้งานอยู่)
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleActivateProvider(prov);
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700/60 text-slate-300 hover:bg-sky-600 hover:text-white transition"
+                    >
+                      เลือกใช้นี้
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
         </div>
-      </div>
 
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-        {/* Notification Alert */}
-        {notification && (
-          <div
-            className={`mb-6 p-4 rounded-xl flex items-center justify-between border ${
-              notification.type === 'success'
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                : 'bg-rose-50 text-rose-800 border-rose-200'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {notification.type === 'success' ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-              )}
-              <span className="text-sm font-semibold">{notification.message}</span>
-            </div>
-            <button
-              onClick={() => setNotification(null)}
-              className="text-slate-400 hover:text-slate-600 p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
+        {/* Loading state */}
+        {loadingProviders ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
+            <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
+            <span className="text-sm">กำลังโหลดข้อมูลระบบ API...</span>
           </div>
-        )}
-
-        {/* Search & Info Bar */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 mb-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาชื่อ API หรือชื่อเกม/แอพ..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:bg-white focus:outline-hidden focus:border-sky-500 font-medium placeholder:text-slate-400"
-            />
+        ) : !currentProvider ? (
+          <div className="p-12 text-center bg-slate-900/60 rounded-3xl border border-slate-800">
+            <Server className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-white">ยังไม่มีผู้ให้บริการในระบบนี้</h3>
+            <p className="text-sm text-slate-400 mt-1">กรุณาเพิ่มหรือเปิดใช้งานผู้ให้บริการในหมวดนี้</p>
           </div>
+        ) : (
+          <>
+            {/* Card 1: API Configuration Card (Matching IMG_8526.png) */}
+            <div className="bg-[#161b22] border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-6">
+              <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                    <span>จัดการสินค้า {currentProvider.name}</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Sync สินค้าจาก {currentProvider.name} API และตั้งค่าราคา
+                  </p>
+                </div>
+                {currentProvider.is_active && (
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    ผู้ให้บริการหลัก (Active)
+                  </span>
+                )}
+              </div>
 
-          <div className="text-xs text-slate-500 font-medium">
-            พบผู้ให้บริการทั้งหมด <strong className="text-slate-900 font-bold">{filteredProviders.length}</strong> รายการ ในหมวดนี้
-          </div>
-        </div>
+              {/* API Key Input Row */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-300">API KEY</label>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <div className="relative flex-1">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder={currentProvider.has_credentials ? '••••••••••••••••••••••••••••••••' : 'ใส่ API Key ของคุณที่นี่...'}
+                      className="w-full bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-sky-500 transition pr-10 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                    >
+                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveApiKey}
+                    disabled={savingApiKey || !apiKeyInput.trim()}
+                    className="px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white transition flex items-center justify-center gap-2 shadow-xs shrink-0"
+                  >
+                    {savingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    <span>บันทึก</span>
+                  </button>
+                </div>
+              </div>
 
-        {/* Provider Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProviders.map(provider => {
-            const isTopup = provider.category === 'GAME_TOPUP';
-            const isApp = provider.category === 'PREMIUM_APP';
-            const isPay = provider.category === 'PAYMENT';
+              {/* Default Category Row */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                  <FolderPlus className="w-4 h-4 text-sky-400" />
+                  <span>หมวดหมู่ default สำหรับสินค้า {currentProvider.name}</span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  สินค้าที่ Sync ใหม่จะถูกจัดอยู่ในหมวดหมู่นี้อัตโนมัติ (สามารถเปลี่ยนได้ทีละตัว)
+                </p>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <select
+                    value={defaultCategoryId}
+                    onChange={(e) => setDefaultCategoryId(e.target.value)}
+                    className="flex-1 bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-hidden focus:border-sky-500 transition"
+                  >
+                    <option value="">ไม่มีหมวดหมู่</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleSaveDefaultCategory}
+                    disabled={savingCategory}
+                    className="px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white transition flex items-center justify-center gap-2 shadow-xs shrink-0"
+                  >
+                    {savingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    <span>บันทึก</span>
+                  </button>
+                </div>
+              </div>
 
-            const badgeBg = isTopup
-              ? 'bg-amber-50 text-amber-700 border-amber-200'
-              : isApp
-              ? 'bg-purple-50 text-purple-700 border-purple-200'
-              : isPay
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              : 'bg-sky-50 text-sky-700 border-sky-200';
+              {/* 4 Action Buttons Bar (Exact match to IMG_8526.png) */}
+              <div className="flex flex-wrap items-center gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={handleSyncProducts}
+                  disabled={syncing}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-500 text-white transition shadow-sm"
+                >
+                  <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                  <span>{syncing ? 'กำลัง Sync...' : 'Sync สินค้าทันที'}</span>
+                </button>
 
-            const categoryLabel = isTopup
-              ? '🎮 ระบบเติมเกม'
-              : isApp
-              ? '📱 ระบบแอพพรีเมียม'
-              : isPay
-              ? '💳 ระบบชำระเงิน'
-              : '🤖 ระบบ AI';
+                <button
+                  type="button"
+                  onClick={handleCheckBalance}
+                  disabled={checkingBalance}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
+                >
+                  <DollarSign className={`w-4 h-4 ${checkingBalance ? 'animate-spin' : 'text-emerald-400'}`} />
+                  <span>เช็คยอดเงิน</span>
+                </button>
 
-            return (
-              <div
-                key={provider.id}
-                className="bg-white rounded-2xl border border-slate-200/90 hover:border-sky-300 hover:shadow-md transition flex flex-col justify-between overflow-hidden shadow-xs"
-              >
-                <div className="p-5">
-                  {/* Category & Environment Header */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${badgeBg}`}>
-                      {categoryLabel}
+                <button
+                  type="button"
+                  onClick={() => handleBulkToggle(true)}
+                  disabled={updatingBulk}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
+                >
+                  <Eye className="w-4 h-4 text-sky-400" />
+                  <span>เปิดทั้งหมด</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleBulkToggle(false)}
+                  disabled={updatingBulk}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
+                >
+                  <EyeOff className="w-4 h-4 text-rose-400" />
+                  <span>ปิดทั้งหมด</span>
+                </button>
+              </div>
+
+              {/* Card 2: Live Balance Card (Matching IMG_8526.png) */}
+              <div className="bg-[#0d1117] border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
+                <div className="text-xs font-bold text-slate-400 flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-400" />
+                    ยอดเงิน {currentProvider.name}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">อัปเดตแบบ Real-time</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-2 border-t border-slate-800/80">
+                  <div>
+                    <span className="text-xs text-slate-400 block mb-1">Status</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      success
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                          provider.environment === 'production'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-400 block mb-1">Money</span>
+                    <span className="text-lg sm:text-xl font-extrabold text-white font-mono">
+                      ฿{(currentProvider.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: All Products List (Matching IMG_8526.png) */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
+                  <span>สินค้าทั้งหมด</span>
+                  <span className="text-sm font-bold px-2 py-0.5 rounded-lg bg-slate-800 text-sky-400 border border-slate-700">
+                    {filteredItems.length}
+                  </span>
+                </h3>
+
+                {/* Search Bar */}
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="ค้นหาชื่อสินค้า..."
+                    className="w-full bg-[#161b22] border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:border-sky-500 transition shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              {/* Items Table / List */}
+              {filteredItems.length === 0 ? (
+                <div className="bg-[#161b22] border border-slate-800 rounded-3xl p-12 text-center text-slate-500">
+                  <Package className="w-12 h-12 mx-auto mb-3 stroke-1 text-slate-600" />
+                  <p className="text-sm font-semibold text-slate-400">ไม่พบสินค้า</p>
+                  <p className="text-xs text-slate-500 mt-1">กดปุ่ม &quot;Sync สินค้าทันที&quot; ด้านบนเพื่อดึงข้อมูลรายการสินค้าจาก API</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredItems.map((item) => {
+                    const isOutOfStock = item.stock <= 0;
+                    return (
+                      <div
+                        key={item.external_code}
+                        className={`bg-[#161b22] border rounded-2xl p-4 sm:p-5 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                          item.is_active
+                            ? 'border-slate-700 hover:border-slate-600'
+                            : 'border-slate-800/80 opacity-75'
                         }`}
                       >
-                        {provider.environment === 'production' ? '● Production' : '● Sandbox'}
-                      </span>
-                      <span
-                        className={`w-2.5 h-2.5 rounded-full ${
-                          provider.is_active ? 'bg-emerald-500 ring-4 ring-emerald-100' : 'bg-slate-300'
-                        }`}
-                        title={provider.is_active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
-                      />
-                    </div>
-                  </div>
+                        {/* Left: Thumbnail & Details */}
+                        <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                          {/* Thumbnail */}
+                          <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
+                            {item.image ? (
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale opacity-75' : ''}`}
+                              />
+                            ) : (
+                              <Smartphone className="w-6 h-6 text-slate-500" />
+                            )}
+                          </div>
 
-                  {/* Provider Name */}
-                  <h3 className="text-base font-extrabold text-slate-900 line-clamp-1">
-                    {provider.name}
-                  </h3>
-
-                  {/* Endpoint Preview */}
-                  <p className="text-xs text-slate-500 font-mono mt-1 line-clamp-1">
-                    {provider.api_base_url || 'ไม่ได้ระบุ Endpoint'}
-                  </p>
-
-                  {/* Supported Games / Apps List */}
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
-                      <span>เกมและแอพที่ให้บริการ:</span>
-                      <span className="text-[11px] font-semibold text-sky-600">
-                        {provider.supported_games?.length || 0} รายการ
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {provider.supported_games && provider.supported_games.length > 0 ? (
-                        provider.supported_games.slice(0, 5).map((game, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-block px-2 py-1 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium border border-slate-200/60"
-                          >
-                            {game}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">ไม่มีข้อมูลเกมที่ผูก</span>
-                      )}
-                      {provider.supported_games && provider.supported_games.length > 5 && (
-                        <span className="inline-block px-2 py-1 rounded-md bg-sky-50 text-sky-700 text-[11px] font-bold border border-sky-100">
-                          +{provider.supported_games.length - 5}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Actions */}
-                <div className="p-4 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => openDetailModal(provider)}
-                    className="flex-1 inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs sm:text-sm font-bold shadow-xs transition"
-                  >
-                    <SlidersHorizontal className="w-4 h-4" />
-                    ดูรายละเอียด & ตั้งราคา
-                  </button>
-
-                  <button
-                    onClick={() => openEditModal(provider)}
-                    title="แก้ไขการเชื่อมต่อ API"
-                    className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* 1. Modal: ดูรายละเอียด / รายการเกม / คำนวณกำไร / เปิดใช้ API */}
-      {/* ======================================================== */}
-      {detailProvider && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-md bg-sky-100 text-sky-700 text-xs font-bold">
-                    {detailProvider.category === 'GAME_TOPUP' ? '🎮 เติมเกม' : '📱 แอพพรีเมียม'}
-                  </span>
-                  <h2 className="text-lg font-extrabold text-slate-900">
-                    {detailProvider.name}
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Endpoint: <span className="font-mono text-slate-700">{detailProvider.api_base_url || '-'}</span>
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleEnableAllItems}
-                  disabled={savingPrices}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  ⚡ ใช้ API ทั้งหมด
-                </button>
-                <button
-                  onClick={() => setDetailProvider(null)}
-                  className="p-2 rounded-xl bg-slate-200/70 hover:bg-slate-200 text-slate-600 transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Content / Table */}
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 bg-sky-50/80 p-3.5 rounded-xl border border-sky-100">
-                <div className="flex items-center gap-2">
-                  <Info className="w-5 h-5 text-sky-600 shrink-0" />
-                  <span className="text-xs sm:text-sm text-sky-950 font-medium">
-                    กำหนด <strong>ราคาขาย</strong> ได้ทันที ระบบจะคำนวณ <strong>กำไรสุทธิ (฿)</strong> และ <strong>% Margin</strong> ให้ทันที
-                  </span>
-                </div>
-                <button
-                  onClick={handleEnableAllItems}
-                  disabled={savingPrices}
-                  className="sm:hidden inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  ⚡ ใช้ API ทั้งหมด
-                </button>
-              </div>
-
-              {loadingItems ? (
-                <div className="py-16 text-center text-slate-400">
-                  <RefreshCw className="w-7 h-7 animate-spin mx-auto text-sky-500 mb-2" />
-                  กำลังโหลดข้อมูลเกมและแอพ...
-                </div>
-              ) : items.length === 0 ? (
-                <div className="py-16 text-center text-slate-400">
-                  ไม่มีรายการเกมหรือแพ็กเกจที่ผูกกับ API นี้
-                </div>
-              ) : (
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs sm:text-sm border-collapse">
-                      <thead>
-                        <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold">
-                          <th className="py-3 px-4">ชื่อเกม / แอพ / สินค้า</th>
-                          <th className="py-3 px-3 text-right">ต้นทุน (฿)</th>
-                          <th className="py-3 px-3 text-right w-36">ราคาขายหน้าร้าน (฿)</th>
-                          <th className="py-3 px-3 text-right">กำไรสุทธิ (฿)</th>
-                          <th className="py-3 px-3 text-center">เปิดใช้ API</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {items.map(item => {
-                          const isProfitable = item.profit > 0;
-                          return (
-                            <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                              <td className="py-3 px-4 font-bold text-slate-900">
+                          {/* Info */}
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-sm sm:text-base font-bold text-white truncate">
                                 {item.name}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono font-semibold text-slate-600">
-                                ฿{item.cost.toLocaleString()}
-                              </td>
-                              <td className="py-3 px-3 text-right">
-                                <div className="inline-flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1 focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500 shadow-2xs">
-                                  <span className="text-slate-400 text-xs">฿</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    value={item.selling_price}
-                                    onChange={e => handleItemChange(item.id, 'selling_price', e.target.value)}
-                                    className="w-20 text-right font-mono font-bold text-slate-900 focus:outline-hidden text-sm"
-                                  />
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 text-right">
-                                <div className="flex flex-col items-end">
-                                  <span
-                                    className={`font-mono font-extrabold ${
-                                      isProfitable ? 'text-emerald-600' : 'text-rose-600'
-                                    }`}
-                                  >
-                                    {item.profit >= 0 ? `+฿${item.profit.toLocaleString()}` : `-฿${Math.abs(item.profit).toLocaleString()}`}
-                                  </span>
-                                  <span
-                                    className={`text-[10px] font-bold ${
-                                      isProfitable ? 'text-emerald-700' : 'text-rose-600'
-                                    }`}
-                                  >
-                                    ({item.margin_percent}%)
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleItemChange(item.id, 'is_active', !item.is_active)}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 mx-auto ${
-                                    item.is_active
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
-                                      : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
-                                  }`}
-                                >
-                                  {item.is_active ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5" />
-                                      กำลังใช้
-                                    </>
-                                  ) : (
-                                    'ปิดอยู่'
-                                  )}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                              </h4>
+                              {item.is_active ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                  เปิดหน้าเว็บ
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                  ปิด
+                                </span>
+                              )}
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-800/80 text-slate-400 border border-slate-700">
+                                {currentProvider.code}
+                              </span>
+                            </div>
+
+                            {/* Meta Specs */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                              <span>ID: <strong className="text-slate-300 font-mono">{item.external_code}</strong></span>
+                              <span>•</span>
+                              <span>ต้นทุน: <strong className="text-slate-300 font-mono">฿{item.cost}</strong></span>
+                              <span>•</span>
+                              <span>ราคาขาย: <strong className="text-sky-400 font-mono font-bold">฿{item.selling_price}</strong></span>
+                              <span>•</span>
+                              <span>
+                                สต็อก: {isOutOfStock ? (
+                                  <strong className="text-rose-400 font-mono font-bold">0 (หมด)</strong>
+                                ) : (
+                                  <strong className="text-emerald-400 font-mono font-bold">{item.stock}</strong>
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Sub Package Tag Badge */}
+                            <div className="pt-1 flex flex-wrap gap-1.5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-[#0d1117] border border-slate-800 text-slate-300">
+                                <span>{item.name}</span>
+                                <span className="text-sky-400 font-bold">฿{item.selling_price}</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right: Toggle Switch & Edit Button */}
+                        <div className="flex items-center justify-end gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800/80">
+                          {/* Toggle Switch */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleItem(item)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                              item.is_active ? 'bg-sky-500' : 'bg-slate-700'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                                item.is_active ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+
+                          {/* Edit Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingItem(item);
+                              setEditPrice(item.selling_price);
+                              setEditCategoryId(item.category_id || defaultCategoryId);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#21262d] hover:bg-[#30363d] border border-slate-700 text-slate-200 transition"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />
+                            <span>แก้ไข</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
+          </>
+        )}
+      </div>
 
-            {/* Modal Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setDetailProvider(null)}
-                className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
-              >
-                ปิดหน้าต่าง
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveItems}
-                disabled={savingPrices}
-                className="px-5 py-2 text-xs sm:text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs transition inline-flex items-center gap-2"
-              >
-                {savingPrices && <RefreshCw className="w-4 h-4 animate-spin" />}
-                บันทึกการตั้งค่าราคาขาย
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 2. Modal: แก้ไข / ใส่ API Key & Config (สีขาว-ฟ้า อ่านง่าย 100%) */}
-      {/* ======================================================== */}
-      {editingProvider && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="p-2 rounded-xl bg-sky-100 text-sky-700">
-                  <Key className="w-5 h-5" />
-                </span>
-                <div>
-                  <h2 className="text-base font-extrabold text-slate-900">
-                    ตั้งค่าการเชื่อมต่อ API Provider
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    ระบุข้อมูลการเชื่อมต่อและ API Key ให้ถูกต้องตามระบบ
-                  </p>
-                </div>
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#161b22] border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white">{editingItem.name}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">ตั้งค่าราคาขายหน้าร้านและหมวดหมู่</p>
               </div>
               <button
-                onClick={() => setEditingProvider(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSaveConfig} className="p-6 space-y-4">
-              {/* Category Selection */}
+            <div className="space-y-4">
+              {/* Cost & Live Profit Calc */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-[#0d1117] border border-slate-800 text-xs">
+                <div>
+                  <span className="text-slate-400 block mb-0.5">ต้นทุน API</span>
+                  <span className="text-sm font-bold text-slate-200 font-mono">฿{editingItem.cost}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">กำไรคาดการณ์</span>
+                  <span className="text-sm font-bold text-emerald-400 font-mono">
+                    ฿{Math.max(0, editPrice - editingItem.cost)} ({editPrice > 0 ? Math.round(((editPrice - editingItem.cost) / editPrice) * 100) : 0}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Selling Price Input */}
               <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1.5">
-                  1. เลือกประเภทของระบบ API นี้ *
-                </label>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">ราคาขายหน้าร้าน (บาท)</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">฿</span>
+                  <input
+                    type="number"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(Number(e.target.value))}
+                    min={editingItem.cost}
+                    className="w-full bg-[#0d1117] border border-slate-700 rounded-xl pl-8 pr-4 py-2.5 text-sm text-white font-mono focus:outline-hidden focus:border-sky-500 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Category Selector */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">หมวดหมู่สำหรับสินค้านี้</label>
                 <select
-                  value={editForm.category}
-                  onChange={e => setEditForm({ ...editForm, category: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 text-sm font-semibold focus:border-sky-500 focus:outline-hidden"
+                  value={editCategoryId}
+                  onChange={(e) => setEditCategoryId(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-hidden focus:border-sky-500 transition"
                 >
-                  <option value="GAME_TOPUP">🎮 ระบบเติมเกม (Game Top-up)</option>
-                  <option value="PREMIUM_APP">📱 ระบบแอพพรีเมียม (Premium Apps & Digital)</option>
-                  <option value="PAYMENT">💳 ระบบชำระเงิน (Payment Gateway)</option>
-                  <option value="AI">🤖 ระบบ AI ผู้ช่วย (AI Gateway)</option>
+                  <option value="">ไม่มีหมวดหมู่</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
               </div>
+            </div>
 
-              {/* Provider Name */}
-              <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1.5">
-                  2. ชื่อผู้ให้บริการ (Provider Name) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editForm.name}
-                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                  placeholder="เช่น FinShop API, ByShop, PromptPay"
-                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-sm font-semibold focus:border-sky-500 focus:outline-hidden placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* Endpoint Base URL */}
-              <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1.5">
-                  3. Endpoint / Base URL ของระบบ *
-                </label>
-                <input
-                  type="text"
-                  value={editForm.api_base_url}
-                  onChange={e => setEditForm({ ...editForm, api_base_url: e.target.value })}
-                  placeholder="เช่น https://api.finshop.in.th/v1"
-                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-xs focus:border-sky-500 focus:outline-hidden placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* API Key */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-slate-900">
-                    4. ช่องใส่ API Key สำหรับ
-                    <span className="text-sky-700 ml-1">
-                      [{editForm.category === 'GAME_TOPUP' ? 'ระบบเติมเกม' : editForm.category === 'PREMIUM_APP' ? 'ระบบแอพพรีเมียม' : editForm.category === 'PAYMENT' ? 'ระบบชำระเงิน' : 'ระบบ AI'}]
-                    </span>
-                  </label>
-                  {editingProvider.credentials_preview && (
-                    <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      มีคีย์เดิม: {editingProvider.credentials_preview}
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="password"
-                  value={editForm.api_key}
-                  onChange={e => setEditForm({ ...editForm, api_key: e.target.value })}
-                  placeholder={editingProvider.credentials_preview ? 'เว้นว่างไว้หากใช้คีย์เดิม หรือกรอกคีย์ใหม่' : 'วาง API Key ที่ได้รับจากผู้ให้บริการ'}
-                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-xs focus:border-sky-500 focus:outline-hidden placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* API Secret */}
-              <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1.5">
-                  5. ช่องใส่ API Secret / Secret Token (ถ้ามี)
-                </label>
-                <input
-                  type="password"
-                  value={editForm.api_secret}
-                  onChange={e => setEditForm({ ...editForm, api_secret: e.target.value })}
-                  placeholder="เว้นว่างได้หากผู้ให้บริการไม่ต้องการ Secret"
-                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-xs focus:border-sky-500 focus:outline-hidden placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* Environment & Active Toggle */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div>
-                  <label className="block text-xs font-bold text-slate-900 mb-1.5">
-                    สภาพแวดล้อม (Environment)
-                  </label>
-                  <select
-                    value={editForm.environment}
-                    onChange={e => setEditForm({ ...editForm, environment: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs font-semibold focus:border-sky-500 focus:outline-hidden"
-                  >
-                    <option value="production">🟢 Production (ใช้งานจริง)</option>
-                    <option value="sandbox">🟡 Sandbox (ทดสอบระบบ)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-900 mb-1.5">
-                    สถานะการทำงาน
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
-                    className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                      editForm.is_active
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-slate-100 text-slate-600 border-slate-300'
-                    }`}
-                  >
-                    {editForm.is_active ? '✓ เปิดใช้งาน API' : '✕ ปิดใช้งานชั่วคราว'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setEditingProvider(null)}
-                  className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingConfig}
-                  className="px-5 py-2 text-xs sm:text-sm font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs transition inline-flex items-center gap-2"
-                >
-                  {savingConfig && <RefreshCw className="w-4 h-4 animate-spin" />}
-                  บันทึกการตั้งค่า
-                </button>
-              </div>
-            </form>
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveItemEdit}
+                disabled={savingItem}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-400 disabled:bg-slate-800 text-white transition flex items-center gap-1.5 shadow-xs"
+              >
+                {savingItem && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>บันทึกการแก้ไข</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
