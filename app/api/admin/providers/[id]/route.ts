@@ -4,6 +4,8 @@ import { maskSecretPreview } from '@/lib/providers/security/masking';
 
 export const dynamic = 'force-dynamic';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,11 +14,14 @@ export async function GET(
     const { id } = await params;
     const supabase = await createClient();
 
-    const { data: provider, error } = await supabase
-      .from('providers')
-      .select('*')
-      .eq('id', id)
-      .single();
+    let query = supabase.from('providers').select('*');
+    if (UUID_REGEX.test(id)) {
+      query = query.eq('id', id);
+    } else {
+      query = query.eq('code', id.toLowerCase());
+    }
+
+    const { data: provider, error } = await query.maybeSingle();
 
     if (error || !provider) {
       return NextResponse.json({ error: 'Provider not found' }, { status: 404 });
@@ -69,23 +74,64 @@ export async function PUT(
       }
     }
 
-    const { data, error } = await supabase
-      .from('providers')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    // 1. Check if record exists by UUID or by code
+    let existingProvider: any = null;
+    if (UUID_REGEX.test(id)) {
+      const { data } = await supabase.from('providers').select('id, code').eq('id', id).maybeSingle();
+      existingProvider = data;
+    } else {
+      const { data } = await supabase.from('providers').select('id, code').eq('code', id.toLowerCase()).maybeSingle();
+      existingProvider = data;
+    }
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    let finalData: any = null;
+
+    if (existingProvider) {
+      // Update existing record
+      const { data, error } = await supabase
+        .from('providers')
+        .update(updates)
+        .eq('id', existingProvider.id)
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      finalData = data;
+    } else {
+      // Upsert/Insert new record if provider was loaded from fallback
+      const providerCode = body.code || (UUID_REGEX.test(id) ? `prov_${Date.now()}` : id.toLowerCase());
+      const insertPayload = {
+        name: body.name || providerCode,
+        code: providerCode,
+        category: body.category || 'GAME_TOPUP',
+        type: 'ALL',
+        api_base_url: body.api_base_url || '',
+        is_active: body.is_active !== undefined ? body.is_active : true,
+        is_test_mode: body.is_test_mode !== undefined ? body.is_test_mode : (body.environment === 'sandbox'),
+        environment: body.environment || 'sandbox',
+        ...updates,
+      };
+
+      const { data, error } = await supabase
+        .from('providers')
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      finalData = data;
     }
 
     // Always mask credentials before returning to client/browser
-    const safeProvider = data ? {
-      ...data,
-      api_key: data.api_key ? maskSecretPreview(data.api_key) : null,
-      api_secret: data.api_secret ? maskSecretPreview(data.api_secret) : null,
-      has_credentials: !!(data.api_key || data.api_secret),
+    const safeProvider = finalData ? {
+      ...finalData,
+      api_key: finalData.api_key ? maskSecretPreview(finalData.api_key) : null,
+      api_secret: finalData.api_secret ? maskSecretPreview(finalData.api_secret) : null,
+      has_credentials: !!(finalData.api_key || finalData.api_secret),
     } : null;
 
     return NextResponse.json({ success: true, provider: safeProvider });
@@ -102,22 +148,31 @@ export async function DELETE(
     const { id } = await params;
     const supabase = await createClient();
 
+    let targetId = id;
+    if (!UUID_REGEX.test(id)) {
+      const { data } = await supabase.from('providers').select('id').eq('code', id.toLowerCase()).maybeSingle();
+      if (!data) {
+        return NextResponse.json({ success: true, message: 'Provider not present in database' });
+      }
+      targetId = data.id;
+    }
+
     // Clean up dependent foreign keys if needed before deleting provider
-    await supabase.from('provider_routes').delete().eq('provider_id', id);
-    await supabase.from('api_transactions').delete().eq('provider_id', id);
-    await supabase.from('api_logs').delete().eq('provider_id', id);
+    await supabase.from('provider_routes').delete().eq('provider_id', targetId);
+    await supabase.from('api_transactions').delete().eq('provider_id', targetId);
+    await supabase.from('api_logs').delete().eq('provider_id', targetId);
 
     const { error } = await supabase
       .from('providers')
       .delete()
-      .eq('id', id);
+      .eq('id', targetId);
 
     if (error) {
       // Fallback to soft disable if delete is blocked by constraint
       const { error: softErr } = await supabase
         .from('providers')
         .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', targetId);
 
       if (softErr) {
         return NextResponse.json({ error: error.message || softErr.message }, { status: 500 });
