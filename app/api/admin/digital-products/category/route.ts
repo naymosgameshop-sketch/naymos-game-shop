@@ -52,3 +52,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
+
+export async function GET() {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('digital_product_categories')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (error) {
+      return NextResponse.json({ success: false, categories: [] });
+    }
+    return NextResponse.json({ success: true, categories: data || [] });
+  } catch {
+    return NextResponse.json({ success: false, categories: [] });
+  }
+}
