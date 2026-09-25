@@ -98,6 +98,19 @@ export async function PUT(
 
     let finalData: any = null;
 
+    
+    // Enforce single active provider per system category
+    if (updates.is_active === true) {
+      const targetCategory = body.category || existingProvider?.category;
+      if (targetCategory) {
+        await supabase
+          .from('providers')
+          .update({ is_active: false })
+          .eq('category', targetCategory)
+          .neq('id', existingProvider ? existingProvider.id : '00000000-0000-0000-0000-000000000000');
+      }
+    }
+
     if (existingProvider) {
       const { data, error } = await supabase
         .from('providers')
