@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, Sparkles, Smartphone, Package, ShieldCheck, Zap } from 'lucide-react';
+import Image from 'next/image';
+import { Search, Sparkles, Smartphone, Package, ShieldCheck, Zap, Ban } from 'lucide-react';
 import type { DigitalProduct, DigitalProductCategory } from '@/types/digital-product';
 
 interface DigitalProductCatalogProps {
@@ -15,49 +16,30 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      const matchCat =
-        selectedCategory === 'all' ||
-        p.category_id === selectedCategory ||
-        p.category_type.toLowerCase() === selectedCategory.toLowerCase();
+    return products.filter((prod) => {
+      const matchCategory =
+        selectedCategory === 'all' || prod.category_id === selectedCategory;
       const matchSearch =
-        !searchQuery.trim() ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      return matchCat && matchSearch;
+        searchQuery.trim() === '' ||
+        prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (prod.short_description &&
+          prod.short_description.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchCategory && matchSearch;
     });
   }, [products, selectedCategory, searchQuery]);
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-700 p-6 sm:p-10 text-white shadow-xl shadow-sky-500/10">
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold text-sky-100 mb-3 border border-white/20">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Digital Products & Premium Services</span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
-            รายการสินค้า & แอปพรีเมียม
-          </h1>
-          <p className="mt-2 text-sm sm:text-base text-sky-100/90 leading-relaxed">
-            บริการแอปพรีเมียมและสินค้าดิจิทัลแท้ 100% สั่งซื้อง่าย รับสิทธิ์รวดเร็ว ปลอดภัยตลอด 24 ชั่วโมง
-          </p>
-        </div>
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-      </div>
-
-      {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+    <div className="space-y-6">
+      {/* Category Pills & Search */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
-            type="button"
             onClick={() => setSelectedCategory('all')}
-            className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
               selectedCategory === 'all'
-                ? 'bg-sky-500 text-white shadow-sm ring-2 ring-sky-300/40'
-                : 'bg-white text-slate-600 border border-sky-100 hover:bg-sky-50 hover:text-sky-600'
+                ? 'bg-sky-500 text-white shadow-xs shadow-sky-500/20'
+                : 'bg-white/80 hover:bg-white text-slate-600 border border-slate-200/60'
             }`}
           >
             ทั้งหมด
@@ -65,12 +47,11 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
           {categories.map((cat) => (
             <button
               key={cat.id}
-              type="button"
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
                 selectedCategory === cat.id
-                  ? 'bg-sky-500 text-white shadow-sm ring-2 ring-sky-300/40'
-                  : 'bg-white text-slate-600 border border-sky-100 hover:bg-sky-50 hover:text-sky-600'
+                  ? 'bg-sky-500 text-white shadow-xs shadow-sky-500/20'
+                  : 'bg-white/80 hover:bg-white text-slate-600 border border-slate-200/60'
               }`}
             >
               {cat.name}
@@ -79,93 +60,149 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
         </div>
 
         {/* Search Input */}
-        <div className="relative min-w-[240px] sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+        <div className="relative w-full md:w-72">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="ค้นหาสินค้า เช่น YouTube, Spotify..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-full border border-sky-100 bg-white text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-sky-400/30 focus:border-sky-500 shadow-2xs"
+            placeholder="ค้นหาแอพพรีเมียม หรือสินค้า..."
+            className="w-full pl-9 pr-4 py-2 rounded-xl bg-white/80 border border-slate-200/80 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:border-sky-500 focus:bg-white transition-all shadow-2xs"
           />
         </div>
       </div>
 
-      {/* Products Grid */}
+      {/* Product Grid */}
       {filteredProducts.length === 0 ? (
-        <div className="rounded-3xl border border-sky-100 bg-white p-12 text-center shadow-xs">
-          <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="font-bold text-slate-700 text-base">ไม่พบสินค้าในหมวดนี้</h3>
-          <p className="text-xs text-slate-400 mt-1">ลองเปลี่ยนคำค้นหาหรือเลือกหมวดหมู่อื่น</p>
+        <div className="bg-white rounded-3xl border border-sky-100 p-12 text-center text-slate-400">
+          <Package className="w-12 h-12 mx-auto mb-3 text-sky-300 stroke-1" />
+          <p className="text-base font-semibold text-slate-600">ไม่พบสินค้าในหมวดหมู่นี้</p>
+          <p className="text-xs text-slate-400 mt-1">ลองเปลี่ยนคำค้นหาหรือเลือกหมวดหมู่อื่นดูนะครับ</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {filteredProducts.map((prod) => (
-            <div
-              key={prod.id}
-              className="group bg-white rounded-2xl border border-sky-100/80 hover:border-sky-300 hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col justify-between"
-            >
-              <div className="p-5">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-14 h-14 rounded-2xl overflow-hidden bg-sky-50 border border-sky-100 shrink-0 flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform">
-                    {prod.icon ? (
-                      <img src={prod.icon} alt={prod.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Smartphone className="w-6 h-6 text-sky-500" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="inline-block px-2 py-0.5 rounded-md bg-sky-50 text-[10px] font-bold text-sky-700 border border-sky-100 mb-1">
-                      {prod.category_type === 'PREMIUM_APP' ? 'แอปพรีเมียม' : 'ดิจิทัล'}
-                    </span>
-                    <h3 className="font-bold text-slate-800 text-sm sm:text-base truncate group-hover:text-sky-600 transition-colors">
-                      {prod.name}
-                    </h3>
-                  </div>
-                </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+          {filteredProducts.map((prod) => {
+            const hasPackages = prod.packages && prod.packages.length > 0;
+            const allUnavailable = !hasPackages || prod.packages.every(
+              (pkg: any) =>
+                pkg.availability === 'out_of_stock' ||
+                pkg.availability === 'provider_error' ||
+                pkg.availability === 'unavailable' ||
+                pkg.is_active === false ||
+                (pkg.stock !== null && pkg.stock !== undefined && pkg.stock <= 0)
+            );
 
-                <p className="mt-3 text-xs text-slate-500 line-clamp-2 leading-relaxed min-h-[32px]">
-                  {prod.description || 'บริการดิจิทัลคุณภาพ รวดเร็ว ปลอดภัย'}
-                </p>
+            const statusLabel = allUnavailable ? 'สินค้าหมดชั่วคราว' : 'พร้อมจัดส่ง';
 
-                {/* Packages Pill Preview */}
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {prod.packages.slice(0, 2).map((pkg) => (
-                    <span
-                      key={pkg.id}
-                      className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-100 text-slate-600"
-                    >
-                      {pkg.name}
-                    </span>
-                  ))}
-                  {prod.packages.length > 2 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-lg bg-sky-50 text-sky-600">
-                      +{prod.packages.length - 2}
+            return (
+              <div
+                key={prod.id}
+                className={`group relative flex flex-col bg-white rounded-2xl border transition-all duration-300 overflow-hidden shadow-2xs ${
+                  allUnavailable
+                    ? 'border-slate-200 shadow-none'
+                    : 'border-sky-100/90 hover:border-sky-300 hover:shadow-lg hover:shadow-sky-500/10 hover:-translate-y-0.5'
+                }`}
+              >
+                {/* Header Image / Icon Area */}
+                <div className="relative aspect-video w-full bg-gradient-to-br from-sky-50 to-blue-50 border-b border-sky-50 flex items-center justify-center overflow-hidden">
+                  {prod.image_url ? (
+                    <Image
+                      src={prod.image_url}
+                      alt={prod.name}
+                      fill
+                      unoptimized
+                      className={`object-cover transition-transform duration-500 ${
+                        allUnavailable ? 'grayscale contrast-75 brightness-90' : 'group-hover:scale-105'
+                      }`}
+                    />
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-white shadow-xs border border-sky-100">
+                      <Smartphone className={`w-8 h-8 ${allUnavailable ? 'text-slate-400 grayscale' : 'text-sky-500'}`} />
+                    </div>
+                  )}
+
+                  {/* Badge */}
+                  {prod.badge && !allUnavailable && (
+                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-lg bg-sky-500 text-white text-[10px] font-bold shadow-xs flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      {prod.badge}
                     </span>
                   )}
+
+                  {/* Out of stock grayscale overlay */}
+                  {allUnavailable && (
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-600/95 text-white text-[10px] sm:text-xs font-bold shadow-md">
+                        <Ban className="w-3.5 h-3.5" />
+                        {statusLabel}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="p-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <h3 className={`font-bold text-sm sm:text-base line-clamp-1 transition-colors ${
+                      allUnavailable ? 'text-slate-500' : 'text-slate-800 group-hover:text-sky-600'
+                    }`}>
+                      {prod.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                      {prod.short_description || 'บริการแอพแท้ ถูกลิขสิทธิ์ รับประกันตลอดการใช้งาน'}
+                    </p>
+
+                    {/* Packages Preview */}
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {prod.packages.slice(0, 2).map((pkg) => (
+                        <span
+                          key={pkg.id}
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 text-slate-600"
+                        >
+                          {pkg.name}
+                        </span>
+                      ))}
+                      {prod.packages.length > 2 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-600">
+                          +{prod.packages.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Price & Action Footer */}
+                <div className="p-3.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-medium">เริ่มต้นเพียง</span>
+                    <span className={`text-sm sm:text-base font-extrabold ${
+                      allUnavailable ? 'text-slate-500' : 'text-sky-600'
+                    }`}>
+                      ฿{prod.minPrice.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={allUnavailable}
+                    onClick={() => {
+                      if (!allUnavailable) {
+                        alert(`คุณเลือก: ${prod.name}\nระบบกำลังจัดเตรียมหน้าสั่งซื้อสำหรับสินค้านี้`);
+                      }
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 ${
+                      allUnavailable
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-sky-600 hover:bg-sky-700 text-white'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>{allUnavailable ? 'สินค้าหมด' : 'สั่งซื้อ'}</span>
+                  </button>
                 </div>
               </div>
-
-              {/* Price & Action Footer */}
-              <div className="p-4 bg-sky-50/40 border-t border-sky-100/60 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-medium">เริ่มต้นเพียง</span>
-                  <span className="text-base sm:text-lg font-black text-sky-600">
-                    ฿{prod.minPrice.toLocaleString()}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => alert(`คุณเลือก: ${prod.name}\nระบบกำลังจัดเตรียมหน้าสั่งซื้อสำหรับสินค้านี้`)}
-                  className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>สั่งซื้อ</span>
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
