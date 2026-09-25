@@ -109,7 +109,7 @@ export default function AdminProvidersPage() {
       setLoading(true);
       const res = await fetch('/api/admin/providers');
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok && (data.providers || data.success)) {
         const provs: Provider[] = data.providers || [];
         setProviders(provs);
 
