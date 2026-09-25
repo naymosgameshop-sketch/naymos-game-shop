@@ -42,3 +42,5 @@ export function createPublicClient() {
   }
   return publicClientInstance;
 }
+
+export { createAdminClient } from './admin';
