@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function getSupabase() {
   try {
     return createAdminClient();
@@ -22,6 +24,10 @@ export async function PUT(
     const supabase = await getSupabase();
     const body = await req.json();
     const { id } = await params;
+
+    if (!UUID_REGEX.test(id)) {
+      return NextResponse.json({ success: true, message: 'บันทึกข้อมูลตัวอย่างสำเร็จ' });
+    }
 
     const {
       name,
@@ -72,13 +78,33 @@ export async function DELETE(
     const supabase = await getSupabase();
     const { id } = await params;
 
-    // Delete packages first
+    // Handle mock / non-UUID items gracefully
+    if (!UUID_REGEX.test(id)) {
+      return NextResponse.json({ success: true, message: 'ลบแอปตัวอย่างเรียบร้อย' });
+    }
+
+    // 1. Get package IDs for this product to clean up provider routes
+    const { data: pkgs } = await supabase
+      .from('digital_product_packages')
+      .select('id')
+      .eq('digital_product_id', id);
+
+    const pkgIds = (pkgs || []).map((p: any) => p.id);
+    if (pkgIds.length > 0) {
+      await supabase
+        .from('provider_routes')
+        .delete()
+        .eq('target_type', 'DIGITAL_PRODUCT_PACKAGE')
+        .in('target_id', pkgIds);
+    }
+
+    // 2. Delete packages
     await supabase.from('digital_product_packages').delete().eq('digital_product_id', id);
 
-    // Delete fields
+    // 3. Delete fields
     await supabase.from('digital_product_fields').delete().eq('digital_product_id', id);
 
-    // Delete product
+    // 4. Delete product
     const { error } = await supabase.from('digital_products').delete().eq('id', id);
 
     if (error) {

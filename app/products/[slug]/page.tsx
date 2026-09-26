@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Sparkles, ShieldCheck, Zap, CheckCircle2 } from 'lucide-react';
 import { CustomerLayout } from '@/components/customer/CustomerLayout';
 import { getActiveDigitalProducts } from '@/lib/digital-products/queries';
-import { createClient } from '@/lib/supabase/server';
+import { DigitalProductOrderForm } from '@/components/customer/DigitalProductOrderForm';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -44,13 +44,18 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Left: Product Info Card */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-black shadow-md">
-              {product.name.slice(0, 1)}
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4 h-fit">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-3xl font-black shadow-md overflow-hidden">
+              {product.icon ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={product.icon} alt={product.name} className="w-full h-full object-cover" />
+              ) : (
+                product.name.slice(0, 1)
+              )}
             </div>
             <div>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-purple-50 text-purple-600 border border-purple-200">
-                {product.category_type}
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-600 border border-sky-200">
+                {product.category_type === 'PREMIUM_APP' ? 'แอปพรีเมียม' : 'สินค้าดิจิทัล'}
               </span>
               <h1 className="text-xl font-black text-slate-900 mt-2">{product.name}</h1>
               <p className="text-xs text-slate-500 mt-1">{product.description || 'บริการจัดส่งอัตโนมัติ รวดเร็ว ปลอดภัย'}</p>
@@ -64,46 +69,14 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 <Zap className="w-4 h-4 text-amber-500" /> จัดส่งทันทีหลังชำระเงิน
               </div>
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-sky-500" /> ปลอดภัย ไร้ความเสี่ยง
+                <ShieldCheck className="w-4 h-4 text-sky-500" /> ปลอดภัย ไร้ความเสี่ยง 100%
               </div>
             </div>
           </div>
 
-          {/* Right: Packages & Selection */}
-          <div className="md:col-span-2 space-y-4">
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-600" /> เลือกแพ็กเกจที่ต้องการ
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {product.packages.map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className="border border-slate-200 hover:border-purple-400 hover:bg-purple-50/30 p-4 rounded-2xl transition cursor-pointer flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="font-bold text-slate-900 text-sm">{pkg.name}</div>
-                      {pkg.duration && (
-                        <div className="text-[11px] text-slate-400 mt-0.5">ระยะเวลา: {pkg.duration}</div>
-                      )}
-                    </div>
-                    <div className="mt-4 pt-2 border-t border-slate-100 flex items-baseline justify-between">
-                      <span className="text-xs text-slate-400">ราคา</span>
-                      <span className="text-base font-black text-purple-600">฿{pkg.price}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Order Notice */}
-              <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
-                <div className="font-bold text-slate-800">ขั้นตอนการรับสินค้า:</div>
-                <p>1. เลือกแพ็กเกจที่ต้องการ</p>
-                <p>2. ชำระเงินผ่านระบบ PromptPay QR อัตโนมัติ</p>
-                <p>3. รับข้อมูลบัญชีหรือลิงก์คำเชิญได้ทันทีที่หน้าติดตามคำสั่งซื้อ</p>
-              </div>
-            </div>
+          {/* Right: Interactive Order Form */}
+          <div className="md:col-span-2">
+            <DigitalProductOrderForm product={product} />
           </div>
         </div>
       </div>

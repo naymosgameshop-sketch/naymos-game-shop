@@ -173,14 +173,18 @@ export default function AdminDigitalProductsPage() {
     if (!deletingProduct) return;
     setIsDeleting(true);
     try {
+      // If it is a mock item or non-UUID, delete locally immediately
+      const isMockId = String(deletingProduct.id).startsWith('mock-') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(deletingProduct.id);
+      
       const res = await fetch(`/api/admin/digital-products/${deletingProduct.id}`, {
         method: 'DELETE',
       });
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok || isMockId) {
         setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id));
         setDeletingProduct(null);
       } else {
-        alert('เกิดข้อผิดพลาดในการลบแอป');
+        alert(data.error || 'เกิดข้อผิดพลาดในการลบแอป');
       }
     } catch {
       alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
