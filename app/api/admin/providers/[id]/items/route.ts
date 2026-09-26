@@ -244,7 +244,7 @@ async function performProviderSync(supabase: any, provider: any) {
           }
         }
       } catch (err) {
-        console.warn('Finshop balance check error:', err);
+        console.warn('Finshop balance check error:', err?.message || 'Unknown error');
       }
 
       // Fetch products
@@ -324,7 +324,7 @@ async function performProviderSync(supabase: any, provider: any) {
           }
         }
       } catch (err) {
-        console.warn('BYShop balance check error:', err);
+        console.warn('BYShop balance check error:', err?.message || 'Unknown error');
       }
 
       // Fetch products

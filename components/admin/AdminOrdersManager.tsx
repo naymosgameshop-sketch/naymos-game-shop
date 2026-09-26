@@ -17,6 +17,7 @@ import {
   FileCheck,
   Loader2,
   ShieldCheck,
+  Server,
   ExternalLink,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -658,6 +659,45 @@ export function AdminOrdersManager({
                   })}
                 </div>
               </div>
+
+              {/* Provider API Fulfillment Details (BYShop / FinShop) */}
+              {Boolean(
+                (selectedOrder.player_data as any)?.provider_order_id ||
+                (selectedOrder.player_data as any)?.orderid ||
+                (selectedOrder.player_data as any)?.transaction_id ||
+                (selectedOrder.player_data as any)?.product_info ||
+                (selectedOrder.player_data as any)?.delivered_info
+              ) && (
+                <div className="p-3.5 rounded-2xl bg-sky-50/80 border border-sky-100 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sky-950 flex items-center gap-1.5">
+                      <Server className="w-4 h-4 text-sky-600" />
+                      <span>ข้อมูลคำสั่งซื้อจาก Provider API</span>
+                    </span>
+                    <span className="font-mono text-[10px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold">
+                      {(selectedOrder.player_data as any)?.provider_name || 'API Provider'}
+                    </span>
+                  </div>
+                  {((selectedOrder.player_data as any)?.provider_order_id || (selectedOrder.player_data as any)?.orderid || (selectedOrder.player_data as any)?.transaction_id) && (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500">รหัสคำสั่งซื้อ API (Order ID):</span>
+                      <span className="font-mono font-bold text-slate-800">
+                        #{(selectedOrder.player_data as any)?.provider_order_id || (selectedOrder.player_data as any)?.orderid || (selectedOrder.player_data as any)?.transaction_id}
+                      </span>
+                    </div>
+                  )}
+                  {((selectedOrder.player_data as any)?.product_info || (selectedOrder.player_data as any)?.delivered_info) && (
+                    <div className="space-y-1">
+                      <span className="text-slate-500 text-[11px]">ข้อมูลสินค้า / รหัสที่ได้รับ:</span>
+                      <div className="p-2 bg-white rounded-xl border border-sky-100 font-mono text-[11px] text-slate-800 flex items-center justify-between">
+                        <span className="truncate flex-1">
+                          {(selectedOrder.player_data as any)?.product_info || (selectedOrder.player_data as any)?.delivered_info}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Slip view */}
               {((selectedOrder.player_data as any)?._slip_url ||
