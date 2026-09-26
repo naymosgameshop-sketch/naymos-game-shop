@@ -85,9 +85,8 @@ export async function GET() {
   try {
     const supabase = await getSupabase();
 
-    // 1. Repair any legacy/corrupted provider records in DB
+        // 1. Repair any legacy/corrupted provider records in DB
     try {
-      // Fix any provider with code 'new' or name FinShop
       await supabase
         .from('providers')
         .update({
@@ -96,8 +95,7 @@ export async function GET() {
           category: 'PREMIUM_APP',
           api_base_url: 'https://finshop.me/api/v1',
         })
-        .or('code.eq.new,name.ilike.%finshop%')
-        .neq('code', 'finshop');
+        .or('code.eq.new,code.eq.finshop,name.ilike.%finshop%');
     } catch {
       // Ignore if update fails
     }
@@ -108,7 +106,16 @@ export async function GET() {
       .order('priority', { ascending: false })
       .order('created_at', { ascending: false });
 
-    let providers = dbProviders || [];
+        let providers = dbProviders || [];
+
+    // Ensure finshop and byshop are normalized to PREMIUM_APP
+    providers = providers.map((p: any) => {
+      const c = (p.code || '').toLowerCase();
+      if (c === 'finshop' || c === 'byshop') {
+        return { ...p, category: 'PREMIUM_APP' };
+      }
+      return p;
+    });
 
     // Ensure finshop and byshop are seeded if missing
     for (const seed of BUILT_IN_PROVIDERS) {
@@ -142,10 +149,13 @@ export async function GET() {
       }
     }
 
-    // STRICT FILTER: In PREMIUM_APP, allow ONLY FinShop and BYShop (user requirement)
+        // STRICT FILTER: In PREMIUM_APP, allow ONLY FinShop and BYShop (user requirement)
     providers = providers.filter((p: any) => {
+      const code = (p.code || '').toLowerCase();
+      if (code === 'finshop' || code === 'byshop') {
+        return true;
+      }
       if (p.category === 'PREMIUM_APP') {
-        const code = (p.code || '').toLowerCase();
         return code === 'finshop' || code === 'byshop';
       }
       return true;

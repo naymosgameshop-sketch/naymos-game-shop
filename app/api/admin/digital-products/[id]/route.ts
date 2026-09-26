@@ -63,17 +63,34 @@ export async function DELETE(
     const supabase = await createClient();
     const { id } = params;
 
-    // Soft toggle or remove
-    const { error } = await supabase
-      .from('digital_products')
-      .update({ is_active: false })
-      .eq('id', id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    // 1. Delete associated fields and packages
+    try {
+      await supabase.from('digital_product_fields').delete().eq('digital_product_id', id);
+    } catch {
+      // ignore
     }
 
-    return NextResponse.json({ success: true });
+    try {
+      await supabase.from('digital_product_packages').delete().eq('digital_product_id', id);
+    } catch {
+      // ignore
+    }
+
+    // 2. Delete product record (with fallback to deactivate if foreign key constraints exist)
+    const { error: delErr } = await supabase
+      .from('digital_products')
+      .delete()
+      .eq('id', id);
+
+    if (delErr) {
+      // Fallback: soft-delete / hide if linked to orders
+      await supabase
+        .from('digital_products')
+        .update({ is_active: false })
+        .eq('id', id);
+    }
+
+    return NextResponse.json({ success: true, message: 'ลบแอปเรียบร้อยแล้ว' });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Unauthorized' }, { status: 401 });
   }

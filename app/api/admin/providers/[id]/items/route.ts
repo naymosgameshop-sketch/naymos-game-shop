@@ -529,7 +529,8 @@ export async function PUT(
               slug: slug,
               category_id: categoryId,
               description: targetItem.product_info || targetItem.name,
-              image_url: targetItem.image || '',
+              icon: targetItem.image || '',
+              category_type: 'PREMIUM_APP',
               is_active: true,
               updated_at: new Date().toISOString(),
             }, { onConflict: 'slug' })
@@ -540,7 +541,7 @@ export async function PUT(
             await supabase
               .from('digital_product_packages')
               .upsert({
-                product_id: digitalProduct.id,
+                digital_product_id: digitalProduct.id,
                 name: `${targetItem.name} (${targetItem.duration || '30 วัน'})`,
                 cost: Number(targetItem.cost) || 0,
                 selling_price: Number(targetItem.selling_price) || Number(targetItem.cost) || 0,
@@ -570,7 +571,7 @@ export async function PUT(
             await supabase
               .from('digital_product_packages')
               .update({ is_active: false })
-              .eq('product_id', digProd.id);
+              .eq('digital_product_id', digProd.id);
           }
         }
       }
@@ -606,7 +607,8 @@ export async function PUT(
                 slug: slug,
                 category_id: categoryId,
                 description: item.product_info || item.name,
-                image_url: item.image || '',
+                icon: item.image || '',
+                category_type: 'PREMIUM_APP',
                 is_active: true,
                 updated_at: new Date().toISOString(),
               }, { onConflict: 'slug' })
@@ -617,7 +619,7 @@ export async function PUT(
               await supabase
                 .from('digital_product_packages')
                 .upsert({
-                  product_id: digitalProduct.id,
+                  digital_product_id: digitalProduct.id,
                   name: `${item.name} (${item.duration || '30 วัน'})`,
                   cost: Number(item.cost) || 0,
                   selling_price: Number(item.selling_price) || Number(item.cost) || 0,
@@ -646,7 +648,7 @@ export async function PUT(
               await supabase
                 .from('digital_product_packages')
                 .update({ is_active: false })
-                .eq('product_id', digProd.id);
+                .eq('digital_product_id', digProd.id);
             }
           }
         }
@@ -690,7 +692,7 @@ export async function PUT(
               selling_price: Number(item.selling_price),
               updated_at: new Date().toISOString(),
             })
-            .eq('product_id', digProd.id)
+            .eq('digital_product_id', digProd.id)
             .eq('external_package_id', String(item.external_code));
         }
       }

@@ -105,9 +105,9 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
               >
                 {/* Header Image / Icon Area */}
                 <div className="relative aspect-video w-full bg-gradient-to-br from-sky-50 to-blue-50 border-b border-sky-50 flex items-center justify-center overflow-hidden">
-                  {prod.image_url ? (
+                  {Boolean(prod.image_url || (typeof prod.icon === "string" && (prod.icon.startsWith("http") || prod.icon.startsWith("/"))) || prod.banner) ? (
                     <Image
-                      src={prod.image_url}
+                      src={((prod.image_url || prod.icon || prod.banner) as string)}
                       alt={prod.name}
                       fill
                       unoptimized

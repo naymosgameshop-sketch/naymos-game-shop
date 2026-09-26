@@ -441,12 +441,11 @@ export default function AdminProvidersPage() {
   // Providers in current tab
   const categoryProviders = useMemo(() => {
     return providers.filter((p) => {
-      if (p.category !== activeTab) return false;
       if (activeTab === 'PREMIUM_APP') {
         const c = (p.code || '').toLowerCase();
-        return c === 'finshop' || c === 'byshop';
+        return c === 'finshop' || c === 'byshop' || p.category === 'PREMIUM_APP';
       }
-      return true;
+      return p.category === activeTab;
     });
   }, [providers, activeTab]);
 
