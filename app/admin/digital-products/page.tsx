@@ -15,7 +15,9 @@ import {
   Zap,
   Save,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Sparkles,
+  Download
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -57,6 +59,8 @@ const PRESET_APP_LOGOS = [
 export default function AdminDigitalProductsPage() {
   const [products, setProducts] = useState<DigitalProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMock, setIsMock] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
 
@@ -86,6 +90,7 @@ export default function AdminDigitalProductsPage() {
     try {
       const res = await fetch('/api/admin/digital-products');
       const data = await res.json();
+      setIsMock(Boolean(data.is_mock));
       if (data.products) {
         const formatted = data.products.map((p: any) => {
           const pkgs = p.packages || [];
@@ -110,6 +115,29 @@ export default function AdminDigitalProductsPage() {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  const handleSeedDefaults = async () => {
+    setSeeding(true);
+    try {
+      const res = await fetch('/api/admin/digital-products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'seed_defaults' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || 'บันทึกแอปเริ่มต้นลงฐานข้อมูลแล้ว');
+        await fetchProducts();
+      } else {
+        alert(data.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      }
+    } catch {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
 
   // Save Image
   const handleSaveImage = async () => {

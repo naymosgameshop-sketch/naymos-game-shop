@@ -453,6 +453,97 @@ export async function POST(
   }
 }
 
+
+async function syncItemToStorefront(
+  supabase: any,
+  provider: any,
+  item: any,
+  categoryId: string | null,
+  enable: boolean
+) {
+  if (!item || !item.external_code) return;
+
+  const rawCode = String(item.external_code).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  const slug = `app-${provider.code.toLowerCase()}-${rawCode}`;
+  const validCatId = categoryId && UUID_REGEX.test(categoryId) ? categoryId : null;
+
+  if (enable) {
+    // 1. Upsert into digital_products
+    const { data: digProd, error: prodErr } = await supabase
+      .from('digital_products')
+      .upsert({
+        name: item.name,
+        slug: slug,
+        category_id: validCatId,
+        description: item.product_info || item.name,
+        icon: item.image || '',
+        category_type: 'PREMIUM_APP',
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'slug' })
+      .select()
+      .maybeSingle();
+
+    if (digProd) {
+      // 2. Check if package exists for this digital product
+      const { data: existingPkgs } = await supabase
+        .from('digital_product_packages')
+        .select('id')
+        .eq('digital_product_id', digProd.id);
+
+      const priceVal = Number(item.selling_price) || Number(item.cost) || 0;
+      const costVal = Number(item.cost) || 0;
+      const durationVal = item.duration || '30 วัน';
+      const pkgName = `${item.name} (${durationVal})`;
+
+      if (existingPkgs && existingPkgs.length > 0) {
+        await supabase
+          .from('digital_product_packages')
+          .update({
+            name: pkgName,
+            price: priceVal,
+            cost: costVal,
+            duration: durationVal,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingPkgs[0].id);
+      } else {
+        await supabase
+          .from('digital_product_packages')
+          .insert({
+            digital_product_id: digProd.id,
+            name: pkgName,
+            price: priceVal,
+            cost: costVal,
+            duration: durationVal,
+            is_active: true,
+            sort_order: 1,
+          });
+      }
+    }
+  } else {
+    // Hide from storefront
+    const { data: digProd } = await supabase
+      .from('digital_products')
+      .select('id')
+      .eq('slug', slug)
+      .maybeSingle();
+
+    if (digProd) {
+      await supabase
+        .from('digital_products')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', digProd.id);
+
+      await supabase
+        .from('digital_product_packages')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('digital_product_id', digProd.id);
+    }
+  }
+}
+
 // 3. PUT: Update item prices, toggles, or default category
 export async function PUT(
   req: NextRequest,
@@ -503,7 +594,7 @@ export async function PUT(
 
     // Toggle Single Item
     if (toggle_item_id !== undefined && set_active_state !== undefined) {
-      const targetItem = Array.isArray(items) ? items.find((i: any) => i.id === toggle_item_id || i.external_code === toggle_item_id) : null;
+      const targetItem = Array.isArray(items) ? items.find((i: any) => i.id === toggle_item_id || String(i.external_code) === String(toggle_item_id)) : null;
       const targetCode = String(toggle_item_id);
 
       // Update provider_products
@@ -516,69 +607,15 @@ export async function PUT(
         .eq('provider_id', provider.id)
         .eq('external_product_code', targetCode);
 
-      // Publish / unpublish in storefront
+      // Publish / unpublish in storefront & backoffice
       if (targetItem) {
-        const slug = `app-${provider.code}-${targetItem.external_code}`;
-        const categoryId = targetItem.category_id || default_category_id || provider.config?.default_category_id || null;
-
-        if (set_active_state) {
-          const { data: digitalProduct } = await supabase
-            .from('digital_products')
-            .upsert({
-              name: targetItem.name,
-              slug: slug,
-              category_id: categoryId,
-              description: targetItem.product_info || targetItem.name,
-              icon: targetItem.image || '',
-              category_type: 'PREMIUM_APP',
-              is_active: true,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'slug' })
-            .select()
-            .single();
-
-          if (digitalProduct) {
-            await supabase
-              .from('digital_product_packages')
-              .upsert({
-                digital_product_id: digitalProduct.id,
-                name: `${targetItem.name} (${targetItem.duration || '30 วัน'})`,
-                cost: Number(targetItem.cost) || 0,
-                selling_price: Number(targetItem.selling_price) || Number(targetItem.cost) || 0,
-                stock: Number(targetItem.stock) || 0,
-                duration: targetItem.duration || '30 วัน',
-                provider_id: provider.id,
-                external_package_id: String(targetItem.external_code),
-                is_active: true,
-                sort_order: Number(targetItem.external_code) || 1,
-                updated_at: new Date().toISOString(),
-              }, { onConflict: 'product_id,external_package_id' });
-          }
-        } else {
-          // Hide from storefront
-          const { data: digProd } = await supabase
-            .from('digital_products')
-            .select('id')
-            .eq('slug', slug)
-            .maybeSingle();
-
-          if (digProd) {
-            await supabase
-              .from('digital_products')
-              .update({ is_active: false })
-              .eq('id', digProd.id);
-
-            await supabase
-              .from('digital_product_packages')
-              .update({ is_active: false })
-              .eq('digital_product_id', digProd.id);
-          }
-        }
+        const catId = targetItem.category_id || default_category_id || provider.config?.default_category_id || null;
+        await syncItemToStorefront(supabase, provider, targetItem, catId, Boolean(set_active_state));
       }
 
       return NextResponse.json({
         success: true,
-        message: set_active_state ? 'เปิดขายสินค้าบนหน้าเว็บแล้ว' : 'ปิดการแสดงผลบนหน้าเว็บแล้ว',
+        message: set_active_state ? 'เปิดขายสินค้าและนำเข้าหลังบ้านเรียบร้อยแล้ว' : 'ปิดการแสดงผลสินค้าแล้ว',
       });
     }
 
@@ -596,67 +633,14 @@ export async function PUT(
 
       if (Array.isArray(items)) {
         for (const item of items) {
-          const slug = `app-${provider.code}-${item.external_code}`;
-          const categoryId = item.category_id || default_category_id || provider.config?.default_category_id || null;
-
-          if (shouldEnable) {
-            const { data: digitalProduct } = await supabase
-              .from('digital_products')
-              .upsert({
-                name: item.name,
-                slug: slug,
-                category_id: categoryId,
-                description: item.product_info || item.name,
-                icon: item.image || '',
-                category_type: 'PREMIUM_APP',
-                is_active: true,
-                updated_at: new Date().toISOString(),
-              }, { onConflict: 'slug' })
-              .select()
-              .single();
-
-            if (digitalProduct) {
-              await supabase
-                .from('digital_product_packages')
-                .upsert({
-                  digital_product_id: digitalProduct.id,
-                  name: `${item.name} (${item.duration || '30 วัน'})`,
-                  cost: Number(item.cost) || 0,
-                  selling_price: Number(item.selling_price) || Number(item.cost) || 0,
-                  stock: Number(item.stock) || 0,
-                  duration: item.duration || '30 วัน',
-                  provider_id: provider.id,
-                  external_package_id: String(item.external_code),
-                  is_active: true,
-                  sort_order: Number(item.external_code) || 1,
-                  updated_at: new Date().toISOString(),
-                }, { onConflict: 'product_id,external_package_id' });
-            }
-          } else {
-            const { data: digProd } = await supabase
-              .from('digital_products')
-              .select('id')
-              .eq('slug', slug)
-              .maybeSingle();
-
-            if (digProd) {
-              await supabase
-                .from('digital_products')
-                .update({ is_active: false })
-                .eq('id', digProd.id);
-
-              await supabase
-                .from('digital_product_packages')
-                .update({ is_active: false })
-                .eq('digital_product_id', digProd.id);
-            }
-          }
+          const catId = item.category_id || default_category_id || provider.config?.default_category_id || null;
+          await syncItemToStorefront(supabase, provider, item, catId, shouldEnable);
         }
       }
 
       return NextResponse.json({
         success: true,
-        message: shouldEnable ? 'เปิดขายสินค้าทั้งหมดบนหน้าเว็บแล้ว' : 'ปิดการขายสินค้าทั้งหมดแล้ว',
+        message: shouldEnable ? 'เปิดขายสินค้าทั้งหมดและนำเข้าหลังบ้านแล้ว' : 'ปิดการขายสินค้าทั้งหมดแล้ว',
       });
     }
 
@@ -678,28 +662,28 @@ export async function PUT(
           .eq('provider_id', provider.id)
           .eq('external_product_code', String(item.external_code));
 
-        const slug = `app-${provider.code}-${item.external_code}`;
+        const rawCode = String(item.external_code).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+        const slug = `app-${provider.code.toLowerCase()}-${rawCode}`;
         const { data: digProd } = await supabase
           .from('digital_products')
           .select('id')
           .eq('slug', slug)
           .maybeSingle();
 
-        if (digProd) {
+        if (digProd && item.selling_price !== undefined) {
           await supabase
             .from('digital_product_packages')
             .update({
-              selling_price: Number(item.selling_price),
+              price: Number(item.selling_price),
               updated_at: new Date().toISOString(),
             })
-            .eq('digital_product_id', digProd.id)
-            .eq('external_package_id', String(item.external_code));
+            .eq('digital_product_id', digProd.id);
         }
       }
 
       return NextResponse.json({
         success: true,
-        message: 'บันทึกการตั้งราคาเรียบร้อยแล้ว',
+        message: 'บันทึกราคาขายเรียบร้อยแล้ว',
       });
     }
 
