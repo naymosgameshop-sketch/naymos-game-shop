@@ -32,10 +32,10 @@ const BUILT_IN_PROVIDERS = [
     code: 'byshop',
     category: 'PREMIUM_APP',
     type: 'ALL',
-    api_base_url: 'https://byshop.me/api/v1',
+    api_base_url: 'https://byshop.me/api',
     is_active: false,
     is_test_mode: false,
-    priority: 8,
+    priority: 9,
     health_status: 'UNKNOWN',
     balance: 0,
     currency: 'THB',
@@ -85,7 +85,24 @@ export async function GET() {
   try {
     const supabase = await getSupabase();
 
-    const { data: dbProviders, error } = await supabase
+    // 1. Repair any legacy/corrupted provider records in DB
+    try {
+      // Fix any provider with code 'new' or name FinShop
+      await supabase
+        .from('providers')
+        .update({
+          code: 'finshop',
+          name: 'FinShop',
+          category: 'PREMIUM_APP',
+          api_base_url: 'https://finshop.me/api/v1',
+        })
+        .or('code.eq.new,name.ilike.%finshop%')
+        .neq('code', 'finshop');
+    } catch {
+      // Ignore if update fails
+    }
+
+    const { data: dbProviders } = await supabase
       .from('providers')
       .select('*')
       .order('priority', { ascending: false })
@@ -93,50 +110,66 @@ export async function GET() {
 
     let providers = dbProviders || [];
 
-    // If database has no providers yet, seed/fallback to built-in providers
-    if (providers.length === 0) {
-      for (const p of BUILT_IN_PROVIDERS) {
+    // Ensure finshop and byshop are seeded if missing
+    for (const seed of BUILT_IN_PROVIDERS) {
+      const exists = providers.some((p: any) => p.code === seed.code);
+      if (!exists) {
         try {
-          await supabase.from('providers').upsert({
-            name: p.name,
-            code: p.code,
-            category: p.category,
-            type: p.type,
-            api_base_url: p.api_base_url,
-            is_active: p.is_active,
-            is_test_mode: p.is_test_mode,
-            priority: p.priority,
-            health_status: p.health_status,
-            balance: p.balance,
-            currency: p.currency,
-          }, { onConflict: 'code' });
+          const { data: inserted } = await supabase
+            .from('providers')
+            .upsert({
+              name: seed.name,
+              code: seed.code,
+              category: seed.category,
+              type: seed.type,
+              api_base_url: seed.api_base_url,
+              is_active: seed.is_active,
+              is_test_mode: seed.is_test_mode,
+              priority: seed.priority,
+              health_status: seed.health_status,
+              balance: seed.balance,
+              currency: seed.currency,
+            }, { onConflict: 'code' })
+            .select()
+            .single();
+
+          if (inserted) {
+            providers.push(inserted);
+          }
         } catch {
-          // ignore seeding error if RLS/permission restricts
+          providers.push({ ...seed, id: seed.code });
         }
       }
-
-      // Re-query after upsert attempt
-      const { data: reloaded } = await supabase
-        .from('providers')
-        .select('*')
-        .order('priority', { ascending: false });
-
-      providers = (reloaded && reloaded.length > 0) ? reloaded : BUILT_IN_PROVIDERS.map((p, idx) => ({ ...p, id: p.code }));
     }
 
-    const safeProviders = providers.map((p: any) => ({
-      ...p,
-      api_key: p.api_key ? maskSecretPreview(p.api_key) : null,
-      api_secret: p.api_secret ? maskSecretPreview(p.api_secret) : null,
-      has_credentials: !!(p.api_key || p.api_secret),
-    }));
+    // STRICT FILTER: In PREMIUM_APP, allow ONLY FinShop and BYShop (user requirement)
+    providers = providers.filter((p: any) => {
+      if (p.category === 'PREMIUM_APP') {
+        const code = (p.code || '').toLowerCase();
+        return code === 'finshop' || code === 'byshop';
+      }
+      return true;
+    });
+
+    const safeProviders = providers.map((p: any) => {
+      const hasKey = Boolean(p.api_key && p.api_key.trim() !== '');
+      const hasSecret = Boolean(p.api_secret && p.api_secret.trim() !== '');
+      const preview = p.credentials_preview || (hasKey ? maskSecretPreview(p.api_key) : (hasSecret ? maskSecretPreview(p.api_secret) : null));
+
+      return {
+        ...p,
+        api_key: hasKey ? preview : null,
+        api_secret: hasSecret ? preview : null,
+        credentials_preview: preview,
+        has_credentials: hasKey || hasSecret,
+      };
+    });
 
     return NextResponse.json({
       success: true,
       providers: safeProviders,
     });
   } catch (err: any) {
-    // If error querying database, return built-in fallback so UI never goes blank
     const fallback = BUILT_IN_PROVIDERS.map((p) => ({ ...p, id: p.code, has_credentials: false }));
     return NextResponse.json({
       success: true,
@@ -170,16 +203,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name and Code are required' }, { status: 400 });
     }
 
+    const cleanCode = code.toLowerCase() === 'new' ? (name.toLowerCase().includes('finshop') ? 'finshop' : 'byshop') : code.toLowerCase();
     const credentials_preview = maskSecretPreview(api_key || api_secret);
 
     const { data, error } = await supabase
       .from('providers')
-      .insert({
+      .upsert({
         name,
-        code: code.toLowerCase(),
+        code: cleanCode,
         category: category || 'PREMIUM_APP',
         type: type || 'ALL',
-        api_base_url,
+        api_base_url: api_base_url || (cleanCode === 'finshop' ? 'https://finshop.me/api/v1' : 'https://byshop.me/api'),
         api_key,
         api_secret,
         credentials_preview,
@@ -189,7 +223,7 @@ export async function POST(req: NextRequest) {
         timeout_ms: Number(timeout_ms) || 10000,
         max_retries: Number(max_retries) || 2,
         health_status: 'UNKNOWN',
-      })
+      }, { onConflict: 'code' })
       .select()
       .single();
 
@@ -203,6 +237,7 @@ export async function POST(req: NextRequest) {
         ...data,
         api_key: data.api_key ? maskSecretPreview(data.api_key) : null,
         api_secret: data.api_secret ? maskSecretPreview(data.api_secret) : null,
+        has_credentials: Boolean(data.api_key || data.api_secret),
       },
     });
   } catch (err: any) {

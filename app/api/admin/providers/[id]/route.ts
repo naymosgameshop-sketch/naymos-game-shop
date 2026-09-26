@@ -27,7 +27,8 @@ export async function GET(
     if (UUID_REGEX.test(id)) {
       query = query.eq('id', id);
     } else {
-      query = query.eq('code', id.toLowerCase());
+      const cleanCode = id.toLowerCase() === 'new' ? 'finshop' : id.toLowerCase();
+      query = query.eq('code', cleanCode);
     }
 
     const { data: provider, error } = await query.maybeSingle();
@@ -36,11 +37,16 @@ export async function GET(
       return NextResponse.json({ error: 'Provider not found' }, { status: 404 });
     }
 
+    const hasCreds = Boolean(provider.api_key || provider.api_secret);
+    const preview = provider.credentials_preview || (provider.api_key ? maskSecretPreview(provider.api_key) : null);
+
     return NextResponse.json({
       provider: {
         ...provider,
-        api_key: provider.api_key ? maskSecretPreview(provider.api_key) : null,
+        api_key: preview,
         api_secret: provider.api_secret ? maskSecretPreview(provider.api_secret) : null,
+        credentials_preview: preview,
+        has_credentials: hasCreds,
       },
     });
   } catch (err: any) {
@@ -86,19 +92,28 @@ export async function PUT(
       }
     }
 
+    // Resolve target code
+    let resolvedCode = id.toLowerCase();
+    if (resolvedCode === 'new') {
+      resolvedCode = body.name?.toLowerCase().includes('byshop') ? 'byshop' : 'finshop';
+    }
+
     // Find existing provider by UUID or code
     let existingProvider: any = null;
     if (UUID_REGEX.test(id)) {
-      const { data } = await supabase.from('providers').select('id, code').eq('id', id).maybeSingle();
+      const { data } = await supabase.from('providers').select('*').eq('id', id).maybeSingle();
       existingProvider = data;
     } else {
-      const { data } = await supabase.from('providers').select('id, code').eq('code', id.toLowerCase()).maybeSingle();
+      const { data } = await supabase.from('providers').select('*').eq('code', resolvedCode).maybeSingle();
       existingProvider = data;
     }
 
-    let finalData: any = null;
+    // If still not found by code, try by name
+    if (!existingProvider && body.name) {
+      const { data } = await supabase.from('providers').select('*').ilike('name', `%${body.name}%`).maybeSingle();
+      existingProvider = data;
+    }
 
-    
     // Enforce single active provider per system category
     if (updates.is_active === true) {
       const targetCategory = body.category || existingProvider?.category;
@@ -111,7 +126,14 @@ export async function PUT(
       }
     }
 
+    let finalData: any = null;
+
     if (existingProvider) {
+      // If the existing provider had code 'new', fix it
+      if (existingProvider.code === 'new') {
+        updates.code = existingProvider.name?.toLowerCase().includes('byshop') ? 'byshop' : 'finshop';
+      }
+
       const { data, error } = await supabase
         .from('providers')
         .update(updates)
@@ -124,16 +146,15 @@ export async function PUT(
       }
       finalData = data;
     } else {
-      const providerCode = body.code || (UUID_REGEX.test(id) ? `prov_${Date.now()}` : id.toLowerCase());
       const insertPayload = {
-        name: body.name || providerCode,
-        code: providerCode,
-        category: body.category || 'GAME_TOPUP',
+        name: body.name || (resolvedCode === 'byshop' ? 'BYShop' : 'FinShop'),
+        code: resolvedCode,
+        category: body.category || 'PREMIUM_APP',
         type: 'ALL',
-        api_base_url: body.api_base_url || '',
+        api_base_url: body.api_base_url || (resolvedCode === 'byshop' ? 'https://byshop.me/api' : 'https://finshop.me/api/v1'),
         is_active: body.is_active !== undefined ? body.is_active : true,
-        is_test_mode: body.is_test_mode !== undefined ? body.is_test_mode : (body.environment === 'sandbox'),
-        environment: body.environment || 'sandbox',
+        is_test_mode: body.is_test_mode !== undefined ? body.is_test_mode : false,
+        environment: body.environment || 'production',
         ...updates,
       };
 
@@ -149,16 +170,20 @@ export async function PUT(
       finalData = data;
     }
 
-    const safeProvider = finalData ? {
+    const hasCreds = Boolean(finalData.api_key || finalData.api_secret);
+    const preview = finalData.credentials_preview || (finalData.api_key ? maskSecretPreview(finalData.api_key) : null);
+
+    const safeProvider = {
       ...finalData,
-      api_key: finalData.api_key ? maskSecretPreview(finalData.api_key) : null,
+      api_key: preview,
       api_secret: finalData.api_secret ? maskSecretPreview(finalData.api_secret) : null,
-      has_credentials: !!(finalData.api_key || finalData.api_secret),
-    } : null;
+      credentials_preview: preview,
+      has_credentials: hasCreds,
+    };
 
     return NextResponse.json({ success: true, provider: safeProvider });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
   }
 }
 
@@ -170,26 +195,20 @@ export async function DELETE(
     const { id } = await params;
     const supabase = await getSupabase();
 
-    let targetId = id;
-    if (!UUID_REGEX.test(id)) {
-      const { data } = await supabase.from('providers').select('id').eq('code', id.toLowerCase()).maybeSingle();
-      if (!data) {
-        return NextResponse.json({ success: true, message: 'Provider removed' });
-      }
-      targetId = data.id;
+    let query = supabase.from('providers').delete();
+    if (UUID_REGEX.test(id)) {
+      query = query.eq('id', id);
+    } else {
+      query = query.eq('code', id.toLowerCase());
     }
 
-    await supabase.from('provider_routes').delete().eq('provider_id', targetId);
-    await supabase.from('api_transactions').delete().eq('provider_id', targetId);
-    await supabase.from('api_logs').delete().eq('provider_id', targetId);
-
-    const { error } = await supabase.from('providers').delete().eq('id', targetId);
+    const { error } = await query;
     if (error) {
-      await supabase.from('providers').update({ is_active: false }).eq('id', targetId);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'Provider deleted successfully' });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
   }
 }
