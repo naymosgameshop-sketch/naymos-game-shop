@@ -55,16 +55,10 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
   const meta = (product as any)?.metadata || {};
   const askEmail = Boolean(meta.ask_email);
   const askPassword = Boolean(meta.ask_password);
-  const termsContent = meta.terms || '1. สินค้าเป็นแอปพรีเมียมตามระยะเวลาที่ระบุในแพ็กเกจ
-2. ห้ามเปลี่ยนรหัสผ่าน หรือแก้ไขข้อมูลบัญชีโดยไม่ได้รับอนุญาต
-3. ทางร้านรับประกันการใช้งานตลอดอายุของแพ็กเกจ
-4. เมื่อชำระเงินแล้ว ระบบจะจัดส่งรหัสหรือข้อมูลบัญชีให้ในประวัติการสั่งซื้อ';
+  const termsContent = meta.terms || '1. สินค้าเป็นแอปพรีเมียมตามระยะเวลาที่ระบุในแพ็กเกจ\n2. ห้ามเปลี่ยนรหัสผ่าน หรือแก้ไขข้อมูลบัญชีโดยไม่ได้รับอนุญาต\n3. ทางร้านรับประกันการใช้งานตลอดอายุของแพ็กเกจ\n4. เมื่อชำระเงินแล้ว ระบบจะจัดส่งรหัสหรือข้อมูลบัญชีให้ในประวัติการสั่งซื้อ';
 
   // Parse description/features into checklist items
-  const rawDescription = product.description || meta.details || meta.instructions || 'บริการสตรีมมิ่งคุณภาพสูง
-ความคมชัดระดับ 4K
-รับชมได้ทันทีหลังชำระเงิน
-รับประกันตลอดอายุการใช้งาน';
+  const rawDescription = product.description || meta.details || meta.instructions || 'บริการสตรีมมิ่งคุณภาพสูง\nความคมชัดระดับ 4K\nรับชมได้ทันทีหลังชำระเงิน\nรับประกันตลอดอายุการใช้งาน';
   const checklistItems = rawDescription
     .split('\n')
     .map(line => line.trim())
