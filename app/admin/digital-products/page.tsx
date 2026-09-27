@@ -176,7 +176,7 @@ export default function AdminDigitalProductsPage() {
       // If it is a mock item or non-UUID, delete locally immediately
       const isMockId = String(deletingProduct.id).startsWith('mock-') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(deletingProduct.id);
       
-      const res = await fetch(`/api/admin/digital-products/${deletingProduct.id}`, {
+      const res = await fetch(`/api/admin/digital-products/${deletingProduct.id}?slug=${encodeURIComponent(deletingProduct.slug)}`, {
         method: 'DELETE',
       });
       const data = await res.json().catch(() => ({}));
