@@ -249,7 +249,7 @@ export async function getActiveDigitalProducts(): Promise<DigitalProduct[]> {
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
 
-    if (error || !prods || prods.length === 0) {
+    if (error || !prods) {
       return MOCK_DIGITAL_PRODUCTS;
     }
 
