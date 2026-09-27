@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth/get-user';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { resolveActiveRoute, createApiTransaction, recordApiLog } from '@/lib/providers/central-router';
 import { generateOrderNumber } from '@/lib/orders/order-number';
 import { MOCK_DIGITAL_PRODUCTS } from '@/lib/digital-products/queries';
 
@@ -18,6 +17,9 @@ async function getSupabase() {
   }
 }
 
+// NOTE: Provider purchase is NOT fired at order creation.
+// The real provider API purchase runs only AFTER payment is confirmed
+// (admin manual confirm / slip verification) via the central provider router.
 export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser();
@@ -102,45 +104,6 @@ export async function POST(req: NextRequest) {
     if (orderErr) {
       console.error('Create digital order DB error:', orderErr);
       return NextResponse.json({ error: 'ไม่สามารถสร้างคำสั่งซื้อได้: ' + orderErr.message }, { status: 500 });
-    }
-
-    // Provider integration (if connected)
-    let transaction = null;
-    if (UUID_REGEX.test(pkg.id)) {
-      try {
-        const route = await resolveActiveRoute('DIGITAL_PRODUCT_PACKAGE', pkg.id);
-        if (route) {
-          transaction = await createApiTransaction({
-            routeId: route.id,
-            providerId: route.provider_id,
-            targetType: 'DIGITAL_PRODUCT_PACKAGE',
-            targetId: pkg.id,
-            orderId: order?.id,
-            orderNumber: orderNumber,
-            requestPayload: {
-              package_name: pkg.name,
-              product_name: prod?.name,
-              customer_fields: {
-                email: contactEmail || user?.email,
-                phone: contactPhone,
-                notes,
-                ...customFields,
-              },
-              user_id: user?.id || null,
-            },
-          });
-
-          await recordApiLog({
-            transactionId: transaction?.id,
-            providerId: route.provider_id,
-            endpoint: '/api/v1/purchase',
-            direction: 'OUTBOUND',
-            requestPayload: { target: pkg.name, order_number: orderNumber, status: 'QUEUED' },
-          });
-        }
-      } catch (provErr) {
-        console.warn('Provider routing deferred:', provErr);
-      }
     }
 
     return NextResponse.json({
