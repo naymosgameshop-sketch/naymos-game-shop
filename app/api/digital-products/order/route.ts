@@ -86,20 +86,55 @@ export async function POST(req: NextRequest) {
       created_via: 'digital_storefront',
     };
 
-    // Create Order in DB
-    const { data: order, error: orderErr } = await supabase
+    // Create Order in DB using standard total/subtotal columns
+    const orderPayload: Record<string, any> = {
+      order_number: orderNumber,
+      user_id: user?.id || null,
+      total: price,
+      subtotal: price,
+      discount: 0,
+      status: 'PENDING_PAYMENT',
+      player_data: playerData,
+    };
+
+    // Try primary insert with contact_email
+    let { data: order, error: orderErr } = await supabase
       .from('orders')
       .insert({
-        order_number: orderNumber,
-        user_id: user?.id || null,
-        guest_email: contactEmail || user?.email || null,
-        guest_phone: contactPhone || null,
-        amount: price,
-        status: 'PENDING_PAYMENT',
-        player_data: playerData,
+        ...orderPayload,
+        contact_email: contactEmail || user?.email || null,
+        contact_phone: contactPhone || null,
       })
       .select()
       .maybeSingle();
+
+    // If column contact_email fails in cache, fallback to guest_email or core payload
+    if (orderErr && (orderErr.message?.includes('contact_email') || orderErr.message?.includes('column'))) {
+      const retry1 = await supabase
+        .from('orders')
+        .insert({
+          ...orderPayload,
+          guest_email: contactEmail || user?.email || null,
+          guest_phone: contactPhone || null,
+        })
+        .select()
+        .maybeSingle();
+
+      if (!retry1.error) {
+        order = retry1.data;
+        orderErr = null;
+      } else {
+        const retry2 = await supabase
+          .from('orders')
+          .insert(orderPayload)
+          .select()
+          .maybeSingle();
+        if (!retry2.error) {
+          order = retry2.data;
+          orderErr = null;
+        }
+      }
+    }
 
     if (orderErr) {
       console.error('Create digital order DB error:', orderErr);
