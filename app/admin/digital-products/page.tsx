@@ -11,13 +11,19 @@ import {
   ArrowUpRight,
   RefreshCw,
   Search,
-  ExternalLink,
   Zap,
   Save,
   X,
   AlertTriangle,
   Sparkles,
-  Download
+  FileText,
+  DollarSign,
+  Layers,
+  Info,
+  Check,
+  Globe,
+  Sliders,
+  ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -26,6 +32,7 @@ interface Package {
   name: string;
   price: number;
   cost?: number;
+  duration?: string;
   is_active?: boolean;
 }
 
@@ -43,6 +50,10 @@ interface DigitalProduct {
   sort_order: number;
   packages: Package[];
   minPrice: number;
+  metadata?: Record<string, any>;
+  cost?: number;
+  stock?: number;
+  external_code?: string;
 }
 
 const PRESET_APP_LOGOS = [
@@ -59,10 +70,32 @@ const PRESET_APP_LOGOS = [
 export default function AdminDigitalProductsPage() {
   const [products, setProducts] = useState<DigitalProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isMock, setIsMock] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Detail & Edit Modal
+  const [detailProduct, setDetailProduct] = useState<DigitalProduct | null>(null);
+  const [detailForm, setDetailForm] = useState<{
+    name: string;
+    slug: string;
+    description: string;
+    instructions: string;
+    icon: string;
+    category_type: string;
+    is_active: boolean;
+    packages: { id: string; name: string; price: number; duration: string; is_active: boolean }[];
+  }>({
+    name: '',
+    slug: '',
+    description: '',
+    instructions: '',
+    icon: '',
+    category_type: 'PREMIUM_APP',
+    is_active: true,
+    packages: [],
+  });
+  const [savingDetail, setSavingDetail] = useState(false);
 
   // Edit Image Modal
   const [editingImageProduct, setEditingImageProduct] = useState<DigitalProduct | null>(null);
@@ -90,7 +123,6 @@ export default function AdminDigitalProductsPage() {
     try {
       const res = await fetch('/api/admin/digital-products');
       const data = await res.json();
-      setIsMock(Boolean(data.is_mock));
       if (data.products) {
         const formatted = data.products.map((p: any) => {
           const pkgs = p.packages || [];
@@ -116,30 +148,127 @@ export default function AdminDigitalProductsPage() {
     fetchProducts();
   }, []);
 
-  const handleSeedDefaults = async () => {
-    setSeeding(true);
+  // Quick Toggle Active State (เปิด/ปิดการขาย)
+  const handleToggleActive = async (prod: DigitalProduct) => {
+    const nextState = !prod.is_active;
+    setTogglingId(prod.id);
+
+    // Optimistic update
+    setProducts((prev) =>
+      prev.map((p) => (p.id === prod.id ? { ...p, is_active: nextState } : p))
+    );
+
     try {
-      const res = await fetch('/api/admin/digital-products', {
-        method: 'POST',
+      const res = await fetch(`/api/admin/digital-products/${prod.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'seed_defaults' }),
+        body: JSON.stringify({ is_active: nextState }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert(data.message || 'บันทึกแอปเริ่มต้นลงฐานข้อมูลแล้ว');
-        await fetchProducts();
-      } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+
+      if (!res.ok) {
+        // Revert on failure
+        setProducts((prev) =>
+          prev.map((p) => (p.id === prod.id ? { ...p, is_active: prod.is_active } : p))
+        );
+        alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะเปิด-ปิดการขาย');
       }
     } catch {
+      setProducts((prev) =>
+        prev.map((p) => (p.id === prod.id ? { ...p, is_active: prod.is_active } : p))
+      );
       alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
     } finally {
-      setSeeding(false);
+      setTogglingId(null);
     }
   };
 
+  // Open Details Modal
+  const handleOpenDetail = (prod: DigitalProduct) => {
+    setDetailProduct(prod);
+    setDetailForm({
+      name: prod.name || '',
+      slug: prod.slug || '',
+      description: prod.description || '',
+      instructions: prod.metadata?.instructions || prod.metadata?.details || '',
+      icon: prod.icon || prod.image_url || '',
+      category_type: prod.category_type || 'PREMIUM_APP',
+      is_active: prod.is_active,
+      packages: (prod.packages || []).map((pkg) => ({
+        id: pkg.id,
+        name: pkg.name || '',
+        price: pkg.price || 0,
+        duration: pkg.duration || '30 วัน',
+        is_active: pkg.is_active !== false,
+      })),
+    });
+  };
 
-  // Save Image
+  // Save Detail & Text Changes
+  const handleSaveDetail = async () => {
+    if (!detailProduct) return;
+    setSavingDetail(true);
+
+    try {
+      const payload = {
+        name: detailForm.name.trim(),
+        slug: detailForm.slug.trim(),
+        description: detailForm.description.trim(),
+        icon: detailForm.icon.trim(),
+        category_type: detailForm.category_type,
+        is_active: detailForm.is_active,
+        metadata: {
+          ...(detailProduct.metadata || {}),
+          instructions: detailForm.instructions.trim(),
+        },
+        packages: detailForm.packages,
+      };
+
+      const res = await fetch(`/api/admin/digital-products/${detailProduct.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id === detailProduct.id) {
+              const updatedPkgs = detailForm.packages.map((dp) => {
+                const orig = p.packages.find((origPkg) => origPkg.id === dp.id);
+                return { ...(orig || {}), ...dp };
+              });
+              const minPrice = updatedPkgs.length > 0
+                ? updatedPkgs.reduce((min, cur) => (cur.price < min ? cur.price : min), updatedPkgs[0]?.price || 0)
+                : 0;
+              return {
+                ...p,
+                name: detailForm.name.trim(),
+                slug: detailForm.slug.trim(),
+                description: detailForm.description.trim(),
+                icon: detailForm.icon.trim(),
+                category_type: detailForm.category_type,
+                is_active: detailForm.is_active,
+                metadata: payload.metadata,
+                packages: updatedPkgs,
+                minPrice,
+              };
+            }
+            return p;
+          })
+        );
+        setDetailProduct(null);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      }
+    } catch {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+    } finally {
+      setSavingDetail(false);
+    }
+  };
+
+  // Save Image quick modal
   const handleSaveImage = async () => {
     if (!editingImageProduct) return;
     setSavingImage(true);
@@ -173,17 +302,14 @@ export default function AdminDigitalProductsPage() {
     if (!deletingProduct) return;
     setIsDeleting(true);
     try {
-      // If it is a mock item or non-UUID, delete locally immediately
-      const isMockId = String(deletingProduct.id).startsWith('mock-') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(deletingProduct.id);
-      
       const res = await fetch(`/api/admin/digital-products/${deletingProduct.id}?slug=${encodeURIComponent(deletingProduct.slug)}`, {
         method: 'DELETE',
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok || isMockId) {
+      if (res.ok) {
         setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id));
         setDeletingProduct(null);
       } else {
+        const data = await res.json().catch(() => ({}));
         alert(data.error || 'เกิดข้อผิดพลาดในการลบแอป');
       }
     } catch {
@@ -234,6 +360,21 @@ export default function AdminDigitalProductsPage() {
     }
   };
 
+  // Identify API origin (FinShop / BYShop)
+  const getApiSourceInfo = (prod: DigitalProduct) => {
+    const slug = prod.slug || '';
+    if (slug.includes('finshop')) {
+      return { provider: 'FinShop', isApi: true, badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    }
+    if (slug.includes('byshop')) {
+      return { provider: 'BYShop', isApi: true, badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' };
+    }
+    if (slug.startsWith('app-')) {
+      return { provider: 'External API', isApi: true, badgeClass: 'bg-sky-50 text-sky-700 border-sky-200' };
+    }
+    return { provider: 'กำหนดเองในระบบ', isApi: false, badgeClass: 'bg-slate-50 text-slate-600 border-slate-200' };
+  };
+
   const filteredProducts = products.filter((p) => {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -258,7 +399,7 @@ export default function AdminDigitalProductsPage() {
             รายการแอปพรีเมียมในร้าน
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            ใส่รูปแอป ปรับแต่งราคา ลบแอป และจัดการสินค้าที่ซิงค์จาก FinShop & BYShop
+            เปิด-ปิดการขายหน้าร้าน ดูรายละเอียดสินค้า ซิงค์ API FinShop/BYShop และแก้ไขข้อความสำหรับแสดงบนเว็บ
           </p>
         </div>
 
@@ -353,10 +494,10 @@ export default function AdminDigitalProductsPage() {
             <thead className="bg-sky-50/60 text-slate-600 border-b border-sky-100 font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3.5 px-4">รูปแอป / ชื่อสินค้า</th>
-                <th className="py-3.5 px-4">หมวดหมู่</th>
+                <th className="py-3.5 px-4">แหล่งที่มา</th>
                 <th className="py-3.5 px-4">แพ็กเกจที่ขาย</th>
                 <th className="py-3.5 px-4">ราคาเริ่มต้น</th>
-                <th className="py-3.5 px-4">สถานะหน้าร้าน</th>
+                <th className="py-3.5 px-4">เปิด/ปิดขาย (หน้าร้าน)</th>
                 <th className="py-3.5 px-4 text-right">การจัดการ</th>
               </tr>
             </thead>
@@ -382,6 +523,8 @@ export default function AdminDigitalProductsPage() {
                     (typeof prod.banner === 'string' ? prod.banner : null);
                   const isHttp =
                     displayImg && (displayImg.startsWith('http') || displayImg.startsWith('/'));
+                  const apiInfo = getApiSourceInfo(prod);
+                  const isToggling = togglingId === prod.id;
 
                   return (
                     <tr key={prod.id} className="hover:bg-sky-50/30 transition">
@@ -434,11 +577,16 @@ export default function AdminDigitalProductsPage() {
                         </div>
                       </td>
 
-                      {/* Category */}
+                      {/* Source & Category */}
                       <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-full bg-sky-100/70 text-sky-700 font-semibold text-[11px]">
-                          {prod.category_type === 'PREMIUM_APP' ? 'แอปพรีเมียม' : 'สินค้าดิจิทัล'}
-                        </span>
+                        <div className="space-y-1">
+                          <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${apiInfo.badgeClass}`}>
+                            {apiInfo.provider}
+                          </span>
+                          <div className="text-[10px] text-slate-500 font-medium">
+                            {prod.category_type === 'PREMIUM_APP' ? 'แอปพรีเมียม' : 'สินค้าดิจิทัล'}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Packages */}
@@ -464,45 +612,68 @@ export default function AdminDigitalProductsPage() {
                         ฿{prod.minPrice.toLocaleString()}
                       </td>
 
-                      {/* Status */}
+                      {/* Storefront Active Toggle (ระบบเปิด-ปิดการขาย) */}
                       <td className="py-3.5 px-4">
-                        {prod.is_active ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold text-[11px]">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            เปิดขาย
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(prod)}
+                          disabled={isToggling}
+                          className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs ${
+                            prod.is_active
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                          }`}
+                          title={prod.is_active ? 'คลิกเพื่อปิดขายบนหน้าเว็บ' : 'คลิกเพื่อเปิดขายบนหน้าเว็บ'}
+                        >
+                          {/* Toggle Switch Visual */}
+                          <span
+                            className={`w-7 h-4 flex items-center rounded-full p-0.5 transition duration-300 ${
+                              prod.is_active ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                            }`}
+                          >
+                            <span className="bg-white w-3 h-3 rounded-full shadow-md transform transition" />
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-slate-400 font-semibold text-[11px]">
-                            <XCircle className="w-3.5 h-3.5" />
-                            ปิดขาย
+
+                          <span className="flex items-center gap-1">
+                            {isToggling ? (
+                              <RefreshCw className="w-3 h-3 animate-spin text-slate-400" />
+                            ) : prod.is_active ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>เปิดขายบนเว็บ</span>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                                <span>ปิดขาย</span>
+                              </>
+                            )}
                           </span>
-                        )}
+                        </button>
                       </td>
 
-                      {/* Actions: Edit Image & Delete Button */}
+                      {/* Actions: Details & Delete */}
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Details / Edit Button */}
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingImageProduct(prod);
-                              setImageUrlInput(prod.icon || prod.image_url || '');
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg border border-sky-200 bg-white hover:bg-sky-50 text-sky-600 font-bold text-[11px] transition shadow-2xs inline-flex items-center gap-1"
-                            title="เปลี่ยนรูปภาพแอป"
+                            onClick={() => handleOpenDetail(prod)}
+                            className="px-2.5 py-1.5 rounded-lg border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-[11px] transition shadow-2xs inline-flex items-center gap-1"
+                            title="ดูรายละเอียดสินค้าและแก้ไขข้อความบนเว็บ"
                           >
-                            <ImageIcon className="w-3.5 h-3.5" />
-                            <span>ใส่รูป</span>
+                            <FileText className="w-3.5 h-3.5 text-sky-600" />
+                            <span>รายละเอียด</span>
                           </button>
 
+                          {/* Delete Button */}
                           <button
                             type="button"
                             onClick={() => setDeletingProduct(prod)}
-                            className="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 font-bold text-[11px] transition shadow-2xs inline-flex items-center gap-1"
+                            className="px-2 py-1.5 rounded-lg border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 font-bold text-[11px] transition shadow-2xs inline-flex items-center gap-1"
                             title="ลบแอปนี้ออกจากระบบ"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
-                            <span>ลบแอป</span>
                           </button>
                         </div>
                       </td>
@@ -514,6 +685,249 @@ export default function AdminDigitalProductsPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal: Product Details & Web Customization */}
+      {detailProduct && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-sky-100 space-y-5 my-8">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600 font-black shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base sm:text-lg flex items-center gap-2">
+                    <span>รายละเอียดสินค้า: {detailProduct.name}</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    ดูข้อมูลที่ซิงค์จาก API พร้อมแก้ไขข้อความและรายละเอียดที่จะแสดงบนหน้าร้าน
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailProduct(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* API Synced Information Box */}
+            <div className="p-4 rounded-2xl bg-sky-50/70 border border-sky-100 text-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sky-900 flex items-center gap-1.5 text-xs">
+                  <Zap className="w-4 h-4 text-sky-600" /> ข้อมูลที่ซิงค์จากระบบ / API
+                </span>
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getApiSourceInfo(detailProduct).badgeClass}`}>
+                  ผู้ให้บริการ: {getApiSourceInfo(detailProduct).provider}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-[11px]">
+                <div className="bg-white p-2.5 rounded-xl border border-sky-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px]">รหัส Slug URL</span>
+                  <span className="font-mono font-bold text-slate-700 truncate block">/{detailProduct.slug}</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-sky-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px]">สถานะบนหน้าร้าน</span>
+                  <span className={`font-bold ${detailForm.is_active ? 'text-emerald-600' : 'text-slate-500'}`}>
+                    {detailForm.is_active ? '✓ กำลังเปิดขาย' : '✕ ปิดขายชั่วคราว'}
+                  </span>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-sky-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px]">จำนวนแพ็กเกจ</span>
+                  <span className="font-bold text-slate-700">{detailProduct.packages?.length || 0} รายการ</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-sky-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px]">ราคาเริ่มต้น</span>
+                  <span className="font-bold text-sky-600">฿{detailProduct.minPrice?.toLocaleString() || 0}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Editable Form for Storefront */}
+            <div className="space-y-4 text-xs max-h-[50vh] overflow-y-auto pr-1">
+              {/* Product Name & Slug */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">ชื่อสินค้าที่แสดงบนหน้าเว็บ:</label>
+                  <input
+                    type="text"
+                    value={detailForm.name}
+                    onChange={(e) => setDetailForm({ ...detailForm, name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Slug URL:</label>
+                  <input
+                    type="text"
+                    value={detailForm.slug}
+                    onChange={(e) => setDetailForm({ ...detailForm, slug: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500 bg-white font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Image URL & Preview */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">URL รูปภาพ / โลโก้แอป:</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={detailForm.icon}
+                    onChange={(e) => setDetailForm({ ...detailForm, icon: e.target.value })}
+                    placeholder="https://example.com/logo.png"
+                    className="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500 bg-white"
+                  />
+                  {detailForm.icon && (
+                    <div className="w-10 h-10 rounded-xl border border-sky-100 overflow-hidden shrink-0 bg-slate-50 flex items-center justify-center">
+                      <img src={detailForm.icon} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+                {/* Presets */}
+                <div className="flex flex-wrap gap-1 mt-2">
+                  <span className="text-[10px] text-slate-400 mr-1 self-center">โลโก้แนะนำ:</span>
+                  {PRESET_APP_LOGOS.slice(0, 5).map((item) => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      onClick={() => setDetailForm({ ...detailForm, icon: item.url })}
+                      className="px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-sky-50 hover:text-sky-600 text-[10px] text-slate-600 transition"
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Storefront Active Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/70">
+                <div>
+                  <span className="font-bold text-slate-800 block text-xs">สถานะเปิด/ปิดขายบนหน้าเว็บ</span>
+                  <span className="text-[10px] text-slate-400">เมื่อเปิด สินค้าจะปรากฏบนหน้าร้านและให้ลูกค้าสั่งซื้อได้ทันที</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailForm({ ...detailForm, is_active: !detailForm.is_active })}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs transition border flex items-center gap-1.5 ${
+                    detailForm.is_active
+                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
+                      : 'bg-slate-200 text-slate-600 border-slate-300'
+                  }`}
+                >
+                  {detailForm.is_active ? '✓ กำลังเปิดขาย' : '✕ ปิดขาย'}
+                </button>
+              </div>
+
+              {/* Description (ข้อความคำอธิบายสินค้าบนหน้าเว็บ) */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  คำอธิบายสินค้าบนหน้าเว็บ (Description):
+                </label>
+                <textarea
+                  rows={3}
+                  value={detailForm.description}
+                  onChange={(e) => setDetailForm({ ...detailForm, description: e.target.value })}
+                  placeholder="เช่น แอปพรีเมียมลิขสิทธิ์แท้ 100% ต่ออายุได้ จัดส่งทันทีหลังชำระเงิน"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500 bg-white"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  ข้อความนี้จะแสดงในการ์ดสินค้าและหน้ารายละเอียดของสินค้านั้นๆ
+                </span>
+              </div>
+
+              {/* Extra Instructions / How to use */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  รายละเอียดเพิ่มเติม / คำแนะนำการใช้งาน / เงื่อนไขการรับประกัน:
+                </label>
+                <textarea
+                  rows={2}
+                  value={detailForm.instructions}
+                  onChange={(e) => setDetailForm({ ...detailForm, instructions: e.target.value })}
+                  placeholder="เช่น หลังสั่งซื้อเสร็จ ระบบจะจัดส่งรหัสเข้าสู่ระบบผ่านอีเมลที่ท่านระบุ หรือ ติดต่อเคลมได้ที่ไลน์ร้าน 24 ชม."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500 bg-white"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  ข้อความนี้จะแสดงในหน้าสั่งซื้อเพื่อแนะนำขั้นตอนการใช้งานแก่ลูกค้า
+                </span>
+              </div>
+
+              {/* Packages & Prices editing */}
+              {detailForm.packages.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label className="font-bold text-slate-700 block">
+                    แก้ไขราคาขายของแพ็กเกจ (บาท):
+                  </label>
+                  <div className="space-y-2">
+                    {detailForm.packages.map((pkg, idx) => (
+                      <div key={pkg.id || idx} className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <input
+                          type="text"
+                          value={pkg.name}
+                          onChange={(e) => {
+                            const updated = [...detailForm.packages];
+                            updated[idx].name = e.target.value;
+                            setDetailForm({ ...detailForm, packages: updated });
+                          }}
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs bg-white"
+                        />
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px] text-slate-500 font-bold">฿</span>
+                          <input
+                            type="number"
+                            value={pkg.price}
+                            onChange={(e) => {
+                              const updated = [...detailForm.packages];
+                              updated[idx].price = Number(e.target.value);
+                              setDetailForm({ ...detailForm, packages: updated });
+                            }}
+                            className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs bg-white font-bold text-sky-600"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <Link
+                href={`/products/${detailProduct.slug}`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-bold transition"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>เปิดดูหน้าสินค้าจริงบนเว็บ</span>
+              </Link>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDetailProduct(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  ปิด
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveDetail}
+                  disabled={savingDetail}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white transition flex items-center gap-1.5 shadow-xs"
+                >
+                  {savingDetail ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>บันทึกการเปลี่ยนแปลง</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Edit Image */}
       {editingImageProduct && (

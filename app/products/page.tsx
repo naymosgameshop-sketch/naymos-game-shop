@@ -11,7 +11,8 @@ export const metadata: Metadata = {
   description: 'รายการสินค้าดิจิทัลและแอปพรีเมียมทั้งหมดจาก NayMos GameShop สะดวก รวดเร็ว ปลอดภัย 100% ให้บริการ 24 ชม.',
 };
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function ProductsPage() {
   const [products, categories] = await Promise.all([

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, Sparkles, Smartphone, Package, ShieldCheck, Zap, Ban } from 'lucide-react';
+import { Search, Sparkles, Smartphone, Package, Zap, Ban } from 'lucide-react';
 import type { DigitalProduct, DigitalProductCategory } from '@/types/digital-product';
 
 interface DigitalProductCatalogProps {
@@ -22,8 +22,8 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
       const matchSearch =
         searchQuery.trim() === '' ||
         prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (prod.short_description &&
-          prod.short_description.toLowerCase().includes(searchQuery.toLowerCase()));
+        (prod.description &&
+          prod.description.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchCategory && matchSearch;
     });
   }, [products, selectedCategory, searchQuery]);
@@ -42,7 +42,7 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
                 : 'bg-white/80 hover:bg-white text-slate-600 border border-slate-200/60'
             }`}
           >
-            ทั้งหมด
+            ทั้งหมด ({products.length})
           </button>
           {categories.map((cat) => (
             <button
@@ -66,7 +66,7 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="ค้นหาแอพพรีเมียม หรือสินค้า..."
+            placeholder="ค้นหาแอปพรีเมียม หรือสินค้า..."
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-white/80 border border-slate-200/80 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:border-sky-500 focus:bg-white transition-all shadow-2xs"
           />
         </div>
@@ -93,6 +93,8 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
             );
 
             const statusLabel = allUnavailable ? 'สินค้าหมดชั่วคราว' : 'พร้อมจัดส่ง';
+            const displayImg = prod.icon || prod.image_url || prod.banner || null;
+            const isHttpImg = displayImg && (displayImg.startsWith('http') || displayImg.startsWith('/'));
 
             return (
               <div
@@ -104,10 +106,13 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
                 }`}
               >
                 {/* Header Image / Icon Area */}
-                <div className="relative aspect-video w-full bg-gradient-to-br from-sky-50 to-blue-50 border-b border-sky-50 flex items-center justify-center overflow-hidden">
-                  {Boolean(prod.image_url || (typeof prod.icon === "string" && (prod.icon.startsWith("http") || prod.icon.startsWith("/"))) || prod.banner) ? (
+                <Link
+                  href={`/products/${prod.slug}`}
+                  className="relative aspect-video w-full bg-gradient-to-br from-sky-50 to-blue-50 border-b border-sky-50 flex items-center justify-center overflow-hidden block"
+                >
+                  {isHttpImg ? (
                     <Image
-                      src={((prod.image_url || prod.icon || prod.banner) as string)}
+                      src={displayImg as string}
                       alt={prod.name}
                       fill
                       unoptimized
@@ -121,14 +126,6 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
                     </div>
                   )}
 
-                  {/* Badge */}
-                  {prod.badge && !allUnavailable && (
-                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-lg bg-sky-500 text-white text-[10px] font-bold shadow-xs flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5" />
-                      {prod.badge}
-                    </span>
-                  )}
-
                   {/* Out of stock grayscale overlay */}
                   {allUnavailable && (
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center">
@@ -138,18 +135,18 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
                       </span>
                     </div>
                   )}
-                </div>
+                </Link>
 
                 {/* Content */}
                 <div className="p-4 flex-1 flex flex-col justify-between">
-                  <div>
+                  <Link href={`/products/${prod.slug}`} className="block">
                     <h3 className={`font-bold text-sm sm:text-base line-clamp-1 transition-colors ${
                       allUnavailable ? 'text-slate-500' : 'text-slate-800 group-hover:text-sky-600'
                     }`}>
                       {prod.name}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                      {prod.short_description || 'บริการแอพแท้ ถูกลิขสิทธิ์ รับประกันตลอดการใช้งาน'}
+                      {prod.description || 'บริการแอปแท้ ถูกลิขสิทธิ์ รับประกันตลอดการใช้งาน'}
                     </p>
 
                     {/* Packages Preview */}
@@ -168,7 +165,7 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
                         </span>
                       )}
                     </div>
-                  </div>
+                  </Link>
                 </div>
 
                 {/* Price & Action Footer */}
@@ -182,23 +179,17 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={allUnavailable}
-                    onClick={() => {
-                      if (!allUnavailable) {
-                        alert(`คุณเลือก: ${prod.name}\nระบบกำลังจัดเตรียมหน้าสั่งซื้อสำหรับสินค้านี้`);
-                      }
-                    }}
+                  <Link
+                    href={`/products/${prod.slug}`}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 ${
                       allUnavailable
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        ? 'bg-slate-200 text-slate-400 pointer-events-none'
                         : 'bg-sky-600 hover:bg-sky-700 text-white'
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>{allUnavailable ? 'สินค้าหมด' : 'สั่งซื้อ'}</span>
-                  </button>
+                  </Link>
                 </div>
               </div>
             );

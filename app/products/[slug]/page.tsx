@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Sparkles, ShieldCheck, Zap, CheckCircle2 } from 'lucide-react';
-import { CustomerLayout } from '@/components/customer/CustomerLayout';
+import { ArrowLeft, Sparkles, ShieldCheck, Zap, CheckCircle2, FileText, Info } from 'lucide-react';
+import { CustomerLayout } from '@/components/layout/CustomerLayout';
 import { getActiveDigitalProducts } from '@/lib/digital-products/queries';
 import { DigitalProductOrderForm } from '@/components/customer/DigitalProductOrderForm';
 
@@ -22,6 +22,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function ProductDetailPage({ params }: PageProps) {
   const { slug } = await params;
@@ -31,6 +32,8 @@ export default async function ProductDetailPage({ params }: PageProps) {
   if (!product) {
     notFound();
   }
+
+  const instructions = (product as any)?.metadata?.instructions || (product as any)?.metadata?.details;
 
   return (
     <CustomerLayout>
@@ -58,8 +61,24 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 {product.category_type === 'PREMIUM_APP' ? 'แอปพรีเมียม' : 'สินค้าดิจิทัล'}
               </span>
               <h1 className="text-xl font-black text-slate-900 mt-2">{product.name}</h1>
-              <p className="text-xs text-slate-500 mt-1">{product.description || 'บริการจัดส่งอัตโนมัติ รวดเร็ว ปลอดภัย'}</p>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed whitespace-pre-line">
+                {product.description || 'บริการจัดส่งอัตโนมัติ รวดเร็ว ปลอดภัย'}
+              </p>
             </div>
+
+            {/* Extra instructions / guidance from admin */}
+            {instructions && (
+              <div className="pt-3 border-t border-slate-100">
+                <div className="p-3 rounded-2xl bg-sky-50/60 border border-sky-100 text-xs text-slate-700 space-y-1">
+                  <span className="font-bold text-sky-900 flex items-center gap-1.5 text-[11px]">
+                    <Info className="w-3.5 h-3.5 text-sky-600" /> คำแนะนำเพิ่มเติมจากทางร้าน:
+                  </span>
+                  <p className="text-[11px] leading-relaxed whitespace-pre-line text-slate-600">
+                    {instructions}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-600">
               <div className="flex items-center gap-2">
