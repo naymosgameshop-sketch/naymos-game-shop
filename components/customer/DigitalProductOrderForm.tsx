@@ -105,7 +105,9 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setOrderCreated(data.order);
+        // Redirect directly to the QR scan & payment page
+        router.push(`/pay/${data.order.order_number}`);
+        return;
       } else {
         setError(data.error || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ');
       }
@@ -226,22 +228,7 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
       )}
 
       {/* Product Details Section (Matching FinShop UI checklist) */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <FileText className="w-4 h-4 text-sky-600" /> รายละเอียดสินค้า
-        </h3>
-        
-        <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs">
-          {checklistItems.map((item, idx) => (
-            <div key={idx} className="flex items-start gap-2.5 text-slate-700">
-              <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold">
-                ✓
-              </span>
-              <span className="leading-relaxed">{item}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      
 
       {/* Optional Inputs (Only rendered if toggled in admin) */}
       {(askEmail || askPassword) && (
