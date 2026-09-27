@@ -31,22 +31,16 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error('Fetch digital products error:', error);
-      // Fallback to mock products so backoffice matches storefront
+      // Fallback only when database table does not exist or has connection failure
       return NextResponse.json({
         products: MOCK_DIGITAL_PRODUCTS.map(p => ({ ...p, is_mock: true })),
         is_mock: true,
       });
     }
 
-    if (!products || products.length === 0) {
-      // Return default mock products matching storefront
-      return NextResponse.json({
-        products: MOCK_DIGITAL_PRODUCTS.map(p => ({ ...p, is_mock: true })),
-        is_mock: true,
-      });
-    }
-
-    return NextResponse.json({ products, is_mock: false });
+    // If query succeeded: Return actual products from DB.
+    // If the table is empty because items were deleted, return [] so deleted items don't resurrect!
+    return NextResponse.json({ products: products || [], is_mock: false });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Unauthorized' }, { status: 401 });
   }
@@ -62,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (body.action === 'seed_defaults') {
       let insertedCount = 0;
       for (const mock of MOCK_DIGITAL_PRODUCTS) {
-        const { data: newProd, error: pErr } = await supabase
+        const { data: newProd } = await supabase
           .from('digital_products')
           .upsert({
             name: mock.name,
