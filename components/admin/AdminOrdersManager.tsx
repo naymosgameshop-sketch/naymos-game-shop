@@ -699,6 +699,45 @@ export function AdminOrdersManager({
                 </div>
               )}
 
+              {/* Fulfill via API / Complete Delivery Button */}
+              {selectedOrder.status !== 'SUCCESS' && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sky-950 text-xs flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-sky-600" /> ยืนยันการชำระเงินและส่งมอบสินค้า (API / แมนนวล)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    ระบบจะตรวจสอบยอดเงิน ยิง API สั่งซื้อ (FinShop/BYShop) และส่งมอบรหัสเข้าประวัติการสั่งซื้อของลูกค้าโดยอัตโนมัติ
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm(`ยืนยันการรับยอดและส่งมอบสินค้าให้ออเดอร์ #${selectedOrder.order_number}?`)) return;
+                      try {
+                        const res = await fetch('/api/admin/orders/fulfill-provider', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ id: selectedOrder.id }),
+                        });
+                        const j = await res.json();
+                        if (j.success) {
+                          alert(j.message || 'จัดส่งสินค้าสำเร็จแล้ว!');
+                          window.location.reload();
+                        } else {
+                          alert('ข้อผิดพลาด: ' + j.message);
+                        }
+                      } catch (err: any) {
+                        alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+                      }
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" /> ยืนยันการโอนเงิน & ส่งสินค้าให้ลูกค้าทันที
+                  </button>
+                </div>
+              )}
+
               {/* Slip view */}
               {((selectedOrder.player_data as any)?._slip_url ||
                 (selectedOrder.player_data as any)?.slip_image) && (

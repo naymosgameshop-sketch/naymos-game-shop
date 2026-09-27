@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, ShieldCheck, Zap, CheckCircle2, QrCode, ArrowRight, Loader2, Copy, Check, AlertCircle, UploadCloud } from 'lucide-react';
+import { 
+  Sparkles, ShieldCheck, Zap, CheckCircle2, QrCode, ArrowRight, Loader2, 
+  Copy, Check, AlertCircle, Info, FileText, ChevronDown, ChevronUp, Lock, Mail
+} from 'lucide-react';
 import { PromptPayQRCard } from './PromptPayQRCard';
 import type { DigitalProduct, DigitalProductPackage } from '@/types/digital-product';
 import { useRouter } from 'next/navigation';
@@ -10,10 +13,15 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
   const router = useRouter();
   const packages = (product.packages || []).filter(p => p.is_active !== false);
   const [selectedPkgId, setSelectedPkgId] = useState<string>(packages[0]?.id || '');
+
+  // Form Fields (Only shown if enabled in product metadata)
   const [contactEmail, setContactEmail] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [notes, setNotes] = useState('');
-  const [customFields, setCustomFields] = useState<Record<string, string>>({});
+  const [contactPassword, setContactPassword] = useState('');
+  const [contactNotes, setContactNotes] = useState('');
+
+  // Mandatory Agreement Checkbox
+  const [agreedTerms, setAgreedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +29,11 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
   const [copiedOrder, setCopiedOrder] = useState(false);
 
   // Store PromptPay settings
-  const [store, setStore] = useState({ promptpay_id: '0988251064', account_name: 'ศักดาวิชญ์ คำใจ', bank_name: 'พร้อมเพย์' });
+  const [store, setStore] = useState({ 
+    promptpay_id: '0988251064', 
+    account_name: 'ศักดาวิชญ์ คำใจ', 
+    bank_name: 'พร้อมเพย์' 
+  });
 
   useEffect(() => {
     fetch('/api/settings')
@@ -40,14 +52,40 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
 
   const selectedPkg = packages.find(p => p.id === selectedPkgId) || packages[0];
 
+  const meta = (product as any)?.metadata || {};
+  const askEmail = Boolean(meta.ask_email);
+  const askPassword = Boolean(meta.ask_password);
+  const termsContent = meta.terms || '1. สินค้าเป็นแอปพรีเมียมตามระยะเวลาที่ระบุในแพ็กเกจ
+2. ห้ามเปลี่ยนรหัสผ่าน หรือแก้ไขข้อมูลบัญชีโดยไม่ได้รับอนุญาต
+3. ทางร้านรับประกันการใช้งานตลอดอายุของแพ็กเกจ
+4. เมื่อชำระเงินแล้ว ระบบจะจัดส่งรหัสหรือข้อมูลบัญชีให้ในประวัติการสั่งซื้อ';
+
+  // Parse description/features into checklist items
+  const rawDescription = product.description || meta.details || meta.instructions || 'บริการสตรีมมิ่งคุณภาพสูง
+ความคมชัดระดับ 4K
+รับชมได้ทันทีหลังชำระเงิน
+รับประกันตลอดอายุการใช้งาน';
+  const checklistItems = rawDescription
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
   const handleOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPkg) {
       setError('กรุณาเลือกแพ็กเกจ');
       return;
     }
-    if (!contactEmail.trim() && !contactPhone.trim()) {
-      setError('กรุณากรอกอีเมลหรือเบอร์โทรศัพท์สำหรับจัดส่ง');
+    if (!agreedTerms) {
+      setError('กรุณากดยอมรับข้อตกลงการสั่งซื้อก่อนดำเนินการต่อ');
+      return;
+    }
+    if (askEmail && !contactEmail.trim()) {
+      setError('กรุณากรอกอีเมลสำหรับรับบริการ');
+      return;
+    }
+    if (askPassword && !contactPassword.trim()) {
+      setError('กรุณากรอกรหัสผ่านสำหรับรับบริการ');
       return;
     }
 
@@ -61,9 +99,13 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
         body: JSON.stringify({
           packageId: selectedPkg.id,
           contactEmail: contactEmail.trim(),
-          contactPhone: contactPhone.trim(),
-          notes: notes.trim(),
-          customFields,
+          contactPhone: '',
+          notes: contactNotes.trim(),
+          customFields: {
+            account_email: contactEmail.trim(),
+            account_password: contactPassword.trim(),
+            agreed_terms: true,
+          },
         }),
       });
 
@@ -95,7 +137,9 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <h2 className="text-xl font-black text-slate-900">สั่งซื้อสำเร็จ กรุณาชำระเงิน</h2>
-          <p className="text-xs text-slate-500">สแกน QR Code ด้านล่างเพื่อชำระเงินผ่านแอปธนาคาร</p>
+          <p className="text-xs text-slate-500">
+            โอนเงินตามยอดที่ระบุ และรอแอดมินยืนยันยอดเพื่อส่งรหัสเข้าใน <span className="font-bold text-sky-600">ประวัติการสั่งซื้อ</span> ทันที
+          </p>
         </div>
 
         {/* Order Details Banner */}
@@ -116,7 +160,7 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
           </div>
           <div className="sm:text-right">
             <span className="text-slate-500">ยอดชำระ:</span>
-            <div className="font-black text-slate-900 text-lg text-purple-600">฿{orderCreated.price?.toLocaleString()}</div>
+            <div className="font-black text-lg text-emerald-600">฿{orderCreated.price?.toLocaleString()}</div>
           </div>
         </div>
 
@@ -137,9 +181,9 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
           <button
             type="button"
             onClick={() => router.push(`/order-tracking?number=${orderCreated.order_number}`)}
-            className="flex-1 py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition"
+            className="flex-1 py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition shadow-sm"
           >
-            ไปที่หน้าติดตามคำสั่งซื้อ <ArrowRight className="w-4 h-4" />
+            ไปที่หน้าติดตามคำสั่งซื้อ / รับสินค้า <ArrowRight className="w-4 h-4" />
           </button>
           <button
             type="button"
@@ -153,139 +197,179 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
     );
   }
 
+  const stockCount = selectedPkg?.stock ?? selectedPkg?.stock_quantity ?? 99;
+  const isOutOfStock = stockCount <= 0;
+
   return (
-    <form onSubmit={handleOrder} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
-      <div>
-        <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-600" /> เลือกแพ็กเกจที่ต้องการ
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">คลิกเลือกแพ็กเกจที่คุณต้องการซื้อ</p>
-      </div>
-
-      {/* Package Selection Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {packages.map((pkg) => {
-          const isSelected = selectedPkg?.id === pkg.id;
-          return (
-            <div
-              key={pkg.id}
-              onClick={() => setSelectedPkgId(pkg.id)}
-              className={`p-4 rounded-2xl border transition cursor-pointer flex flex-col justify-between ${
-                isSelected
-                  ? 'border-sky-500 bg-sky-50/50 shadow-xs ring-2 ring-sky-500/20'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-sm">{pkg.name}</span>
-                  {isSelected && <span className="w-2 h-2 rounded-full bg-sky-600" />}
-                </div>
-                {pkg.duration && (
-                  <div className="text-[11px] text-slate-400 mt-0.5">ระยะเวลา: {pkg.duration}</div>
-                )}
-              </div>
-              <div className="mt-4 pt-2 border-t border-slate-100 flex items-baseline justify-between">
-                <span className="text-xs text-slate-400">ราคา</span>
-                <span className="text-base font-black text-sky-600">฿{pkg.price?.toLocaleString()}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Customer Contact Inputs */}
-      <div className="space-y-3 pt-4 border-t border-slate-100">
-        <h3 className="text-xs font-bold text-slate-800">ข้อมูลผู้รับสินค้า / บัญชี</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1">
-              อีเมลสำหรับรับสินค้า <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="email"
-              value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
-              placeholder="example@gmail.com"
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1">
-              เบอร์โทรศัพท์ (สำรอง)
-            </label>
-            <input
-              type="tel"
-              value={contactPhone}
-              onChange={(e) => setContactPhone(e.target.value)}
-              placeholder="08X-XXX-XXXX"
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
-            />
-          </div>
-        </div>
-
-        {/* Dynamic Fields if any */}
-        {(product.fields || []).map((f) => (
-          <div key={f.id}>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1">
-              {f.label} {f.required && <span className="text-rose-500">*</span>}
-            </label>
-            <input
-              type={f.type || 'text'}
-              placeholder={f.placeholder || ''}
-              value={customFields[f.name] || ''}
-              onChange={(e) => setCustomFields({ ...customFields, [f.name]: e.target.value })}
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
-            />
-          </div>
-        ))}
-
-        <div>
-          <label className="block text-[11px] font-bold text-slate-600 mb-1">
-            หมายเหตุเพิ่มเติม (ถ้ามี)
+    <form onSubmit={handleOrder} className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
+      {/* Package Selector (If multiple packages exist) */}
+      {packages.length > 1 && (
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-sky-500" /> เลือกแพ็กเกจ:
           </label>
-          <input
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="ข้อมูลเพิ่มเติม เช่น ลิงก์โปรไฟล์ / รหัสสำหรับต่ออายุ"
-            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
-          />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {packages.map((pkg) => {
+              const isSelected = selectedPkg?.id === pkg.id;
+              return (
+                <button
+                  key={pkg.id}
+                  type="button"
+                  onClick={() => setSelectedPkgId(pkg.id)}
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    isSelected
+                      ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-300/40 text-sky-950 font-bold'
+                      : 'border-slate-200 hover:border-sky-300 text-slate-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold truncate">{pkg.name}</div>
+                  <div className="text-xs text-emerald-600 font-mono mt-0.5">฿{Number(pkg.price).toLocaleString()}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Product Details Section (Matching FinShop UI checklist) */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-sky-600" /> รายละเอียดสินค้า
+        </h3>
+        
+        <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs">
+          {checklistItems.map((item, idx) => (
+            <div key={idx} className="flex items-start gap-2.5 text-slate-700">
+              <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold">
+                ✓
+              </span>
+              <span className="leading-relaxed">{item}</span>
+            </div>
+          ))}
         </div>
       </div>
 
+      {/* Optional Inputs (Only rendered if toggled in admin) */}
+      {(askEmail || askPassword) && (
+        <div className="p-4 rounded-2xl bg-sky-50/60 border border-sky-100 space-y-3">
+          <div className="text-xs font-bold text-sky-950 flex items-center gap-1.5">
+            <Info className="w-4 h-4 text-sky-600" /> ข้อมูลสำหรับการรับบริการ
+          </div>
+          {askEmail && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                <Mail className="w-3.5 h-3.5 text-slate-400" /> อีเมลของคุณ <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="example@gmail.com"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 bg-white"
+              />
+            </div>
+          )}
+          {askPassword && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-slate-400" /> รหัสผ่านของคุณ <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="password"
+                required
+                value={contactPassword}
+                onChange={(e) => setContactPassword(e.target.value)}
+                placeholder="กรอกรหัสผ่าน"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 bg-white"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mandatory Terms & Conditions Checkbox */}
+      <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
+        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={agreedTerms}
+            onChange={(e) => setAgreedTerms(e.target.checked)}
+            className="w-4 h-4 mt-0.5 rounded text-sky-600 border-amber-300 focus:ring-sky-500"
+          />
+          <span className="text-xs text-slate-800 font-semibold leading-relaxed">
+            ฉันได้อ่านและยอมรับ <span className="text-sky-700 underline font-bold" onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }}>ข้อตกลงการสั่งซื้อและเงื่อนไข</span> เรียบร้อยแล้ว <span className="text-red-500">*</span>
+          </span>
+        </label>
+      </div>
+
+      {/* Terms Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 shadow-xl border border-slate-100">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-sky-600" /> ข้อตกลงและเงื่อนไขการสั่งซื้อ
+            </h4>
+            <div className="max-h-60 overflow-y-auto p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-700 whitespace-pre-line leading-relaxed">
+              {termsContent}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAgreedTerms(true);
+                setShowTermsModal(false);
+              }}
+              className="w-full py-2.5 rounded-xl bg-sky-600 text-white font-bold text-xs hover:bg-sky-700 transition"
+            >
+              รับทราบและยอมรับข้อตกลง
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error message */}
       {error && (
-        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs flex items-center gap-2">
+        <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-600 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Submit Button */}
-      <div className="pt-2">
-        <button
-          type="submit"
-          disabled={loading || !selectedPkg}
-          className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition disabled:opacity-50"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" /> กำลังสร้างคำสั่งซื้อ...
-            </>
-          ) : (
-            <>
-              <QrCode className="w-4 h-4" /> สั่งซื้อและชำระเงิน (฿{selectedPkg?.price?.toLocaleString() || 0})
-            </>
-          )}
-        </button>
+      {/* Stock and Price Row (Matching FIN Shop Footer) */}
+      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+        <div className="text-xs text-slate-500 font-medium">
+          คงเหลือ: <span className="font-bold text-slate-800 font-mono">{stockCount}</span> ชิ้น
+        </div>
+        <div className="text-right">
+          <span className="text-xl sm:text-2xl font-black text-rose-600 font-mono">
+            ฿{Number(selectedPkg?.price || 0).toLocaleString()}
+          </span>
+          <span className="text-xs text-slate-400 ml-1">/ ชิ้น</span>
+        </div>
       </div>
 
-      {/* Notice */}
-      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 space-y-1">
-        <div className="font-bold text-slate-700">การรับประกันและจัดส่ง:</div>
-        <p>• จัดส่งอัตโนมัติหรือดำเนินการทันทีหลังชำระเงินเรียบร้อย</p>
-        <p>• รับประกันตลอดอายุการใช้งานของแพ็กเกจ มีแอดมินคอยดูแล 24 ชม.</p>
-      </div>
+      {/* Submit Button (Red/Coral like FIN Shop) */}
+      <button
+        type="submit"
+        disabled={loading || isOutOfStock || !agreedTerms}
+        className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-sm ${
+          isOutOfStock
+            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            : !agreedTerms
+            ? 'bg-rose-400 text-white/80 cursor-not-allowed'
+            : 'bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white shadow-rose-200'
+        }`}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" /> กำลังดำเนินการ...
+          </>
+        ) : isOutOfStock ? (
+          'สินค้าหมดชั่วคราว'
+        ) : (
+          'ดำเนินการต่อ'
+        )}
+      </button>
     </form>
   );
 }

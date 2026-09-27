@@ -65,6 +65,12 @@ export function HeaderNav({ activeOrderCount = 0, profile }: HeaderNavProps) {
       badge: activeOrderCount,
     },
     {
+      href: '/account/orders',
+      label: 'ประวัติการสั่งซื้อ',
+      icon: Package,
+      isActive: pathname === '/account/orders' || pathname.startsWith('/account/orders'),
+    },
+    {
       href: '/promotions',
       label: 'โปรโมชั่น',
       icon: Gift,

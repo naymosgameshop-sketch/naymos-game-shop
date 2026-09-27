@@ -111,9 +111,9 @@ export default async function AccountOrdersPage() {
                     </div>
 
                     <div className="text-right space-y-1">
-                      <p className="font-bold text-sm text-white">฿{Number(o.total).toLocaleString()}</p>
+                      <p className="font-bold text-sm text-slate-800">฿{Number(o.total || o.amount || 0).toLocaleString()}</p>
                       <span
-                        className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium ${orderStatusColor(
+                        className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold ${orderStatusColor(
                           o.status
                         )}`}
                       >
@@ -121,6 +121,26 @@ export default async function AccountOrdersPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Delivered Credentials / Goods Box for customer */}
+                  {Boolean((o.player_data as any)?.delivered_info) && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                          ✓ ข้อมูลบัญชี / รหัสสินค้าที่ได้รับ:
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                          จัดส่งสำเร็จ
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-lg border border-emerald-200 font-mono text-emerald-950 font-semibold select-all break-all whitespace-pre-wrap">
+                        {(o.player_data as any)?.delivered_info}
+                      </div>
+                      <p className="text-[10px] text-emerald-600">
+                        กดคัดลอกหรือบันทึกข้อมูลเพื่อนำไปใช้งานได้ทันที
+                      </p>
+                    </div>
+                  )}
                 </Link>
               );
             })}
