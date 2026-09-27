@@ -141,6 +141,16 @@ export async function GET(
     const hasCreds = Boolean(provider.api_key && provider.api_key.trim() !== '');
     const maskedKey = provider.credentials_preview || (hasCreds ? maskSecretPreview(provider.api_key) : null);
 
+    // Cross-check with digital_products to verify true storefront & backoffice existence
+    const { data: liveDigitalProds } = await supabase
+      .from('digital_products')
+      .select('id, slug, is_active');
+
+    const liveProdMap = new Map<string, boolean>();
+    (liveDigitalProds || []).forEach((dp: any) => {
+      liveProdMap.set(dp.slug, Boolean(dp.is_active));
+    });
+
     // Format items from database only
     const items = (providerProducts || []).map((p: any) => {
       const cost = Number(p.cost) || 0;
@@ -148,13 +158,21 @@ export async function GET(
       const profit = Math.max(0, sellingPrice - cost);
       const profitMargin = sellingPrice > 0 ? Math.round((profit / sellingPrice) * 100) : 0;
       const stock = p.stock !== undefined ? Number(p.stock) : 0;
-      const isActive = Boolean(p.is_active);
+
+      const rawCode = String(p.external_product_code).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const expectedSlug = `app-${provider.code.toLowerCase()}-${rawCode}`;
+
+      // If deleted from digital_products, it is inactive and can be re-added
+      const existsInDigitalProds = liveProdMap.has(expectedSlug);
+      const isStoreActive = existsInDigitalProds && liveProdMap.get(expectedSlug) === true;
+      const isActive = Boolean(p.is_active && isStoreActive);
 
       return {
         id: p.id,
         type: `${provider.code.toUpperCase()}_PRODUCT`,
         name: p.external_name || `สินค้า #${p.external_product_code}`,
         external_code: String(p.external_product_code),
+        slug: expectedSlug,
         category: p.metadata?.category || provider.category || 'PREMIUM_APP',
         category_id: p.metadata?.category_id || provider.config?.default_category_id || categories?.[0]?.id || null,
         duration: p.metadata?.duration || '30 วัน',
@@ -465,38 +483,118 @@ async function syncItemToStorefront(
 
   const rawCode = String(item.external_code).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
   const slug = `app-${provider.code.toLowerCase()}-${rawCode}`;
-  const validCatId = categoryId && UUID_REGEX.test(categoryId) ? categoryId : null;
 
   if (enable) {
-    // 1. Upsert into digital_products
-    const { data: digProd, error: prodErr } = await supabase
+    // 1. Resolve a guaranteed valid category ID (prevents NOT NULL constraint violations)
+    let targetCatId = categoryId && UUID_REGEX.test(categoryId) ? categoryId : null;
+    if (!targetCatId) {
+      const { data: defaultCat } = await supabase
+        .from('digital_product_categories')
+        .select('id')
+        .or('slug.eq.premium-app,slug.ilike.%app%,slug.eq.digital-goods')
+        .order('sort_order', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (defaultCat?.id) {
+        targetCatId = defaultCat.id;
+      } else {
+        const { data: anyCat } = await supabase
+          .from('digital_product_categories')
+          .select('id')
+          .limit(1)
+          .maybeSingle();
+
+        if (anyCat?.id) {
+          targetCatId = anyCat.id;
+        } else {
+          const { data: createdCat } = await supabase
+            .from('digital_product_categories')
+            .insert({
+              slug: 'premium-app',
+              name: 'แอปพรีเมียม',
+              description: 'แอปพรีเมียมรายเดือน/รายปี ลิขสิทธิ์แท้ 100%',
+              icon: 'Smartphone',
+              is_active: true,
+              sort_order: 1,
+            })
+            .select('id')
+            .maybeSingle();
+          if (createdCat?.id) targetCatId = createdCat.id;
+        }
+      }
+    }
+
+    // 2. Upsert into digital_products with schema compatibility
+    let digProd: any = null;
+    let prodErr: any = null;
+
+    const primaryPayload: any = {
+      name: item.name,
+      slug: slug,
+      category_id: targetCatId,
+      description: item.product_info || item.name,
+      icon: item.image || '',
+      category_type: 'PREMIUM_APP',
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
+
+    const res1 = await supabase
       .from('digital_products')
-      .upsert({
-        name: item.name,
-        slug: slug,
-        category_id: validCatId,
-        description: item.product_info || item.name,
-        icon: item.image || '',
-        category_type: 'PREMIUM_APP',
-        is_active: true,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'slug' })
+      .upsert(primaryPayload, { onConflict: 'slug' })
       .select()
       .maybeSingle();
 
-    if (digProd) {
-      // 2. Check if package exists for this digital product
-      const { data: existingPkgs } = await supabase
+    digProd = res1.data;
+    prodErr = res1.error;
+
+    if (prodErr) {
+      console.warn('Upsert digital_products fallback to image_url:', prodErr.message);
+      const fallbackPayload: any = {
+        name: item.name,
+        slug: slug,
+        category_id: targetCatId,
+        description: item.product_info || item.name,
+        image_url: item.image || '',
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      };
+      const res2 = await supabase
+        .from('digital_products')
+        .upsert(fallbackPayload, { onConflict: 'slug' })
+        .select()
+        .maybeSingle();
+      digProd = res2.data;
+    }
+
+    if (digProd?.id) {
+      // 3. Upsert / Insert digital_product_packages
+      let existingPkgs: any[] | null = null;
+      const { data: p1 } = await supabase
         .from('digital_product_packages')
         .select('id')
         .eq('digital_product_id', digProd.id);
+
+      if (p1 && p1.length > 0) {
+        existingPkgs = p1;
+      } else {
+        const { data: p2 } = await supabase
+          .from('digital_product_packages')
+          .select('id')
+          .eq('product_id', digProd.id);
+        existingPkgs = p2;
+      }
 
       const priceVal = Number(item.selling_price) || Number(item.cost) || 0;
       const costVal = Number(item.cost) || 0;
       const durationVal = item.duration || '30 วัน';
       const pkgName = `${item.name} (${durationVal})`;
 
+      let pkgId: string | null = null;
+
       if (existingPkgs && existingPkgs.length > 0) {
+        pkgId = existingPkgs[0].id;
         await supabase
           .from('digital_product_packages')
           .update({
@@ -507,9 +605,9 @@ async function syncItemToStorefront(
             is_active: true,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', existingPkgs[0].id);
+          .eq('id', pkgId);
       } else {
-        await supabase
+        const ins1 = await supabase
           .from('digital_product_packages')
           .insert({
             digital_product_id: digProd.id,
@@ -519,6 +617,46 @@ async function syncItemToStorefront(
             duration: durationVal,
             is_active: true,
             sort_order: 1,
+          })
+          .select('id')
+          .maybeSingle();
+
+        if (ins1.data?.id) {
+          pkgId = ins1.data.id;
+        } else {
+          const ins2 = await supabase
+            .from('digital_product_packages')
+            .insert({
+              product_id: digProd.id,
+              name: pkgName,
+              price: priceVal,
+              duration_days: 30,
+              is_active: true,
+              sort_order: 1,
+            })
+            .select('id')
+            .maybeSingle();
+          if (ins2.data?.id) pkgId = ins2.data.id;
+        }
+      }
+
+      // 4. Ensure provider_routes exists
+      if (pkgId && provider.id) {
+        await supabase
+          .from('provider_routes')
+          .delete()
+          .eq('target_type', 'DIGITAL_PRODUCT_PACKAGE')
+          .eq('target_id', pkgId);
+
+        await supabase
+          .from('provider_routes')
+          .insert({
+            target_type: 'DIGITAL_PRODUCT_PACKAGE',
+            target_id: pkgId,
+            provider_id: provider.id,
+            is_active: true,
+            priority: 1,
+            route_key: `route-dig-${slug}`,
           });
       }
     }
@@ -539,7 +677,7 @@ async function syncItemToStorefront(
       await supabase
         .from('digital_product_packages')
         .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('digital_product_id', digProd.id);
+        .or(`digital_product_id.eq.${digProd.id},product_id.eq.${digProd.id}`);
     }
   }
 }

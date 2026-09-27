@@ -182,13 +182,44 @@ export async function DELETE(
     }
 
     if (UUID_REGEX.test(targetId)) {
+      // 0. Get product info before deletion to sync provider_products state
+      const { data: prodToDelete } = await supabase
+        .from('digital_products')
+        .select('id, slug')
+        .eq('id', targetId)
+        .maybeSingle();
+
+      const slugToDelete = prodToDelete?.slug || targetSlug;
+
+      if (slugToDelete) {
+        // If it's an API app (e.g. app-finshop-1 or app-byshop-10)
+        const match = slugToDelete.match(/^app-[a-z0-9]+-(.+)$/);
+        if (match) {
+          const extCode = match[1];
+          await supabase
+            .from('provider_products')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .or(`external_product_code.eq.${extCode},external_product_code.ilike.${extCode}`);
+        }
+      }
+
       // 1. Get package IDs for this product to clean up provider routes
-      const { data: pkgs } = await supabase
+      let pkgIds: string[] = [];
+      const { data: pkgs1 } = await supabase
         .from('digital_product_packages')
         .select('id')
         .eq('digital_product_id', targetId);
 
-      const pkgIds = (pkgs || []).map((p: any) => p.id);
+      if (pkgs1 && pkgs1.length > 0) {
+        pkgIds = pkgs1.map((p: any) => p.id);
+      } else {
+        const { data: pkgs2 } = await supabase
+          .from('digital_product_packages')
+          .select('id')
+          .eq('product_id', targetId);
+        if (pkgs2) pkgIds = pkgs2.map((p: any) => p.id);
+      }
+
       if (pkgIds.length > 0) {
         await supabase
           .from('provider_routes')
@@ -198,7 +229,10 @@ export async function DELETE(
       }
 
       // 2. Delete packages
-      await supabase.from('digital_product_packages').delete().eq('digital_product_id', targetId);
+      await supabase
+        .from('digital_product_packages')
+        .delete()
+        .or(`digital_product_id.eq.${targetId},product_id.eq.${targetId}`);
 
       // 3. Delete fields
       await supabase.from('digital_product_fields').delete().eq('digital_product_id', targetId);
