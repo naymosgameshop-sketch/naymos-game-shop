@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getCurrentUser } from '@/lib/auth/get-user';
+import { getSessionUser } from '@/lib/auth/get-user';
 
 function generateOrderNumber(): string {
   const date = new Date();
@@ -14,7 +14,7 @@ function generateOrderNumber(): string {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const user = await getSessionUser();
     const body = await request.json();
     const { productId, packageId, customerInfo, customFields, quantity: rawQuantity, agreedToTerms } = body;
 
