@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { 
-  Sparkles, ShieldCheck, Zap, CheckCircle2, ArrowRight, Loader2, 
-  AlertCircle, Info, ChevronRight, Minus, Plus, ShoppingCart, Check,
-  Clock, Flame, HelpCircle
+  Sparkles, ShieldCheck, Zap, ArrowRight, Loader2, 
+  AlertCircle, Check, Minus, Plus, ShoppingCart, 
+  Clock, CheckCircle2, ChevronRight
 } from 'lucide-react';
 import type { DigitalProduct, DigitalProductPackage } from '@/types/digital-product';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 interface DigitalProductOrderFormProps {
   product: DigitalProduct;
@@ -17,25 +16,25 @@ interface DigitalProductOrderFormProps {
 export function DigitalProductOrderForm({ product }: DigitalProductOrderFormProps) {
   const router = useRouter();
   const packages = useMemo(() => {
-    return (product.packages || []).filter(p => p.is_active !== false);
+    return (product.packages || []).filter((p) => p.is_active !== false);
   }, [product.packages]);
 
   const [selectedPkgId, setSelectedPkgId] = useState<string>(packages[0]?.id || '');
   const [quantity, setQuantity] = useState<number>(1);
 
-  // Form Fields (Dynamic based on product configuration)
+  // Form Fields for custom requirements
   const [contactEmail, setContactEmail] = useState('');
   const [contactPassword, setContactPassword] = useState('');
   const [contactNotes, setContactNotes] = useState('');
 
-  // Mandatory Agreement Checkbox
+  // Mandatory Terms Agreement
   const [agreedTerms, setAgreedTerms] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedPkg = useMemo(() => {
-    return packages.find(p => p.id === selectedPkgId) || packages[0];
+    return packages.find((p) => p.id === selectedPkgId) || packages[0];
   }, [packages, selectedPkgId]);
 
   const meta = (product as any)?.metadata || {};
@@ -46,7 +45,7 @@ export function DigitalProductOrderForm({ product }: DigitalProductOrderFormProp
   const totalPrice = unitPrice * quantity;
 
   const handleQuantityChange = (delta: number) => {
-    setQuantity(prev => Math.max(1, Math.min(99, prev + delta)));
+    setQuantity((prev) => Math.max(1, Math.min(99, prev + delta)));
   };
 
   const handleOrder = async (e: React.FormEvent) => {
@@ -56,7 +55,7 @@ export function DigitalProductOrderForm({ product }: DigitalProductOrderFormProp
       return;
     }
     if (!agreedTerms) {
-      setError('กรุณากดยอมรับข้อตกลงการสั่งซื้อก่อนดำเนินการต่อ');
+      setError('กรุณากดยอมรับข้อตกลงก่อนดำเนินการสั่งซื้อ');
       return;
     }
     if (askEmail && !contactEmail.trim()) {
@@ -76,11 +75,14 @@ export function DigitalProductOrderForm({ product }: DigitalProductOrderFormProp
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          productId: product.id,
           packageId: selectedPkg.id,
           quantity,
-          contactEmail: contactEmail.trim(),
-          contactPhone: '',
-          notes: contactNotes.trim(),
+          agreedToTerms: true,
+          customerInfo: {
+            email: contactEmail.trim(),
+            notes: contactNotes.trim(),
+          },
           customFields: {
             account_email: contactEmail.trim(),
             account_password: contactPassword.trim(),
@@ -90,318 +92,252 @@ export function DigitalProductOrderForm({ product }: DigitalProductOrderFormProp
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'ไม่สามารถสร้างคำสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
+        throw new Error(data.message || data.error || 'ไม่สามารถสร้างคำสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
       }
 
-      const redirectUrl = data.order?.redirect_url || `/pay/${data.order?.order_number}`;
+      const redirectUrl = data.payment_url || (data.order_number ? `/pay/${data.order_number}` : `/pay/${data.order_id}`);
       router.push(redirectUrl);
     } catch (err: any) {
-      setError(err.message || 'เกิดข้อผิดพลาดในการสั่งซื้อ');
+      setError(err.message || 'เกิดข้อผิดพลาดในการสั่งซื้อ กรุณาลองใหม่อีกครั้ง');
       setLoading(false);
     }
   };
 
   return (
-    <div className="w-full">
-      <form onSubmit={handleOrder} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Product Info & Package Selection */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Header Product Card */}
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-blue-50/80 via-indigo-50/30 to-transparent rounded-full -mr-20 -mt-20 pointer-events-none" />
-
-            <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center p-2 text-white shadow-md shadow-blue-500/20 shrink-0">
-                {product.icon || (product as any).image_url ? (
-                  <img
-                    src={product.icon || (product as any).image_url}
-                    alt={product.name}
-                    className="w-full h-full object-contain drop-shadow"
-                  />
-                ) : (
-                  <Sparkles className="w-10 h-10 text-white" />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200">
-                    <Sparkles className="w-3 h-3" />
-                    แอปพรีเมียม
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200">
-                    <ShieldCheck className="w-3 h-3" />
-                    แท้ถูกลิขสิทธิ์ 100%
-                  </span>
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">
-                  {product.name}
-                </h1>
-                <p className="text-sm text-slate-500 mt-1 line-clamp-2">
-                  {product.description || (product as any).short_description || 'บริการแอปสตรีมมิ่งและโปรแกรมพรีเมียม พร้อมใช้งานทันที'}
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Guarantees Badge row */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-6 pt-6 border-t border-slate-100">
-              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <Zap className="w-3.5 h-3.5" />
-                </div>
-                <span>ส่งไวอัตโนมัติ</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                </div>
-                <span>ประกันตลอดอายุ</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                  <Clock className="w-3.5 h-3.5" />
-                </div>
-                <span>ดูแล 24 ชม.</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Package Selection */}
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-2 h-6 bg-blue-600 rounded-full" />
+    <div className="w-full space-y-6">
+      <form onSubmit={handleOrder} className="space-y-6">
+        {/* Step 1: Package Selection */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-sky-100 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-sky-50">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-full bg-sky-500 text-white text-xs font-black flex items-center justify-center shadow-xs">
+                1
+              </span>
+              <h2 className="text-base font-bold text-slate-800">
                 เลือกแพ็กเกจที่ต้องการ
               </h2>
-              <span className="text-xs text-slate-400">
-                {packages.length} ตัวเลือก
-              </span>
             </div>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-600">
+              {packages.length} ตัวเลือก
+            </span>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              {packages.map((pkg) => {
-                const isSelected = selectedPkg?.id === pkg.id;
-                return (
-                  <button
-                    key={pkg.id}
-                    type="button"
-                    onClick={() => setSelectedPkgId(pkg.id)}
-                    className={`relative p-4 rounded-2xl border text-left transition-all duration-200 ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20'
-                        : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50/50'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-bold text-slate-800 text-base">{pkg.name}</div>
-                        {pkg.duration && (
-                          <div className="text-xs text-blue-600 font-medium mt-0.5">
-                            ระยะเวลา: {pkg.duration}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <div className="text-base font-bold text-blue-600">
-                          ฿{Number(pkg.price).toLocaleString()}
-                        </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {packages.map((pkg) => {
+              const isSelected = selectedPkg?.id === pkg.id;
+              return (
+                <button
+                  key={pkg.id}
+                  type="button"
+                  onClick={() => setSelectedPkgId(pkg.id)}
+                  className={`group relative p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+                    isSelected
+                      ? 'border-sky-500 bg-gradient-to-br from-sky-50/80 to-blue-50/40 shadow-sm ring-2 ring-sky-400/30'
+                      : 'border-slate-200/80 bg-white hover:border-sky-300 hover:bg-sky-50/30'
+                  }`}
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="space-y-1">
+                      <span className="font-bold text-slate-800 text-sm block group-hover:text-sky-600 transition">
+                        {pkg.name}
+                      </span>
+                      {pkg.duration && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 bg-white/90 px-2 py-0.5 rounded-md border border-sky-100">
+                          <Clock className="w-3 h-3 text-sky-500" />
+                          {pkg.duration}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-base font-black text-sky-600">
+                        ฿{Number(pkg.price).toLocaleString()}
                       </div>
                     </div>
-                    {isSelected && (
-                      <div className="absolute top-2 right-2">
-                        <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+                  </div>
+
+                  {isSelected && (
+                    <div className="absolute top-2.5 right-2.5">
+                      <span className="w-4 h-4 rounded-full bg-sky-500 text-white flex items-center justify-center shadow-xs">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Step 2: Quantity & Custom Input Fields */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-sky-100 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-sky-50">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-full bg-sky-500 text-white text-xs font-black flex items-center justify-center shadow-xs">
+                2
+              </span>
+              <h2 className="text-base font-bold text-slate-800">
+                ระบุจำนวนและข้อมูลเพิ่มเติม
+              </h2>
             </div>
           </div>
 
-          {/* Additional Input Fields if required */}
+          <div className="flex items-center justify-between p-3.5 bg-slate-50/80 rounded-2xl border border-slate-100">
+            <div>
+              <span className="text-sm font-bold text-slate-800 block">จำนวนที่ต้องการซื้อ</span>
+              <span className="text-xs text-slate-400">เลือกจำนวนแพ็กเกจ (ชิ้น)</span>
+            </div>
+            <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-sky-200/60 shadow-xs">
+              <button
+                type="button"
+                onClick={() => handleQuantityChange(-1)}
+                disabled={quantity <= 1 || loading}
+                className="w-8 h-8 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-600 flex items-center justify-center disabled:opacity-40 transition"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <span className="font-extrabold text-slate-800 text-sm w-8 text-center font-mono">
+                {quantity}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleQuantityChange(1)}
+                disabled={quantity >= 99 || loading}
+                className="w-8 h-8 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-600 flex items-center justify-center disabled:opacity-40 transition"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Dynamic input for account credentials if requested */}
           {(askEmail || askPassword) && (
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm space-y-4">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-2 h-6 bg-blue-600 rounded-full" />
-                ข้อมูลสำหรับรับบริการ
-              </h2>
-
-              <div className="space-y-4 pt-1">
-                {askEmail && (
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                      อีเมลสำหรับรับบริการ <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={contactEmail}
-                      onChange={(e) => setContactEmail(e.target.value)}
-                      placeholder="เช่น example@gmail.com"
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                      required
-                    />
-                  </div>
-                )}
-
-                {askPassword && (
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                      รหัสผ่านสำหรับรับบริการ <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={contactPassword}
-                      onChange={(e) => setContactPassword(e.target.value)}
-                      placeholder="กรอกรหัสผ่าน (หากมี)"
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                      required
-                    />
-                  </div>
-                )}
-              </div>
+            <div className="space-y-3 pt-2">
+              {askEmail && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    อีเมลสำหรับรับบริการ / เปิดใช้งาน <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    placeholder="example@gmail.com"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    required
+                  />
+                </div>
+              )}
+              {askPassword && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    รหัสผ่านสำหรับรับบริการ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={contactPassword}
+                    onChange={(e) => setContactPassword(e.target.value)}
+                    placeholder="กรอกรหัสผ่านบัญชี"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    required
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Right Column: Order Summary, Terms & CTA (Sticky on Desktop) */}
-        <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
-          {/* Order Summary Card */}
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm space-y-6">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-4">
-              <ShoppingCart className="w-5 h-5 text-blue-600" />
+        {/* Step 3: Order Summary, Terms & Action */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-sky-100 shadow-sm space-y-5">
+          <div className="flex items-center gap-2.5 pb-3 border-b border-sky-50">
+            <span className="w-7 h-7 rounded-full bg-sky-500 text-white text-xs font-black flex items-center justify-center shadow-xs">
+              3
+            </span>
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4 text-sky-500" />
               สรุปรายการสั่งซื้อ
             </h2>
-
-            {/* Selected Item Preview */}
-            <div className="flex items-center gap-4 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 p-1 flex items-center justify-center shrink-0">
-                {product.icon || (product as any).image_url ? (
-                  <img
-                    src={product.icon || (product as any).image_url}
-                    alt={product.name}
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <Sparkles className="w-6 h-6 text-white" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-slate-800 text-sm truncate">
-                  {product.name}
-                </div>
-                <div className="text-xs text-blue-600 font-medium">
-                  {selectedPkg?.name || 'แพ็กเกจ'}
-                </div>
-                <div className="text-xs text-slate-400 mt-0.5">
-                  ราคาต่อชิ้น: ฿{unitPrice.toLocaleString()}
-                </div>
-              </div>
-            </div>
-
-            {/* Quantity Selector */}
-            <div className="flex items-center justify-between py-2 border-y border-slate-100">
-              <div>
-                <span className="text-sm font-semibold text-slate-700 block">จำนวนสินค้า</span>
-                <span className="text-xs text-slate-400">เลือกจำนวนที่ต้องการ</span>
-              </div>
-              <div className="flex items-center gap-3 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60">
-                <button
-                  type="button"
-                  onClick={() => handleQuantityChange(-1)}
-                  disabled={quantity <= 1 || loading}
-                  className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-600 hover:text-blue-600 disabled:opacity-40 transition-colors"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="font-bold text-slate-800 text-sm w-6 text-center">
-                  {quantity}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleQuantityChange(1)}
-                  disabled={quantity >= 99 || loading}
-                  className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-600 hover:text-blue-600 disabled:opacity-40 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Calculation Lines */}
-            <div className="space-y-2.5 text-sm">
-              <div className="flex justify-between text-slate-500">
-                <span>ราคาต่อชิ้น</span>
-                <span>฿{unitPrice.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>จำนวน</span>
-                <span>{quantity} ชิ้น</span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>ส่วนลด</span>
-                <span className="text-emerald-600">฿0</span>
-              </div>
-              <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
-                <span className="text-base font-bold text-slate-800">ยอดรวมทั้งสิ้น</span>
-                <span className="text-2xl font-extrabold text-blue-600">
-                  ฿{totalPrice.toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            {/* Terms Agreement Section */}
-            <div className="bg-amber-50/70 border border-amber-200/70 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-amber-800 font-bold text-xs uppercase tracking-wider">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                ข้อตกลงและเงื่อนไขก่อนสั่งซื้อ
-              </div>
-              <ul className="text-xs text-amber-900/80 space-y-1.5 list-disc list-inside">
-                <li>กรุณาตรวจสอบแพ็กเกจและข้อมูลให้ถูกต้อง</li>
-                <li>สินค้าดิจิทัลไม่สามารถเปลี่ยนหรือคืนเงินได้หลังจัดส่งแล้ว</li>
-                <li>จัดส่งข้อมูลการใช้งานทันทีในระบบหลังชำระเงิน</li>
-              </ul>
-              <label className="flex items-start gap-2.5 pt-2 border-t border-amber-200/60 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={agreedTerms}
-                  onChange={(e) => setAgreedTerms(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded text-blue-600 border-amber-300 focus:ring-blue-500"
-                />
-                <span className="text-xs font-semibold text-slate-700 leading-tight">
-                  ฉันได้อ่านและยอมรับข้อตกลงการสั่งซื้อเรียบร้อยแล้ว <span className="text-red-500">*</span>
-                </span>
-              </label>
-            </div>
-
-            {/* Error Message if any */}
-            {error && (
-              <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* Action Button */}
-            <button
-              type="submit"
-              disabled={loading || !agreedTerms}
-              className="w-full py-4 px-6 rounded-2xl font-bold text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-500/25 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>กำลังสร้างคำสั่งซื้อ...</span>
-                </>
-              ) : (
-                <>
-                  <span>ดำเนินการต่อ • ฿{totalPrice.toLocaleString()}</span>
-                  <ArrowRight className="w-5 h-5" />
-                </>
-              )}
-            </button>
           </div>
+
+          {/* Real-time Order Summary Card */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-50/60 to-slate-50 border border-sky-100 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-700">{product.name}</span>
+              <span className="font-semibold text-sky-600">{selectedPkg?.name || '-'}</span>
+            </div>
+
+            <div className="space-y-1.5 text-xs text-slate-500 pt-2 border-t border-sky-100/60">
+              <div className="flex justify-between">
+                <span>ราคาต่อชิ้น</span>
+                <span className="font-semibold text-slate-700">฿{unitPrice.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>จำนวนสินค้า</span>
+                <span className="font-semibold text-slate-700">{quantity} ชิ้น</span>
+              </div>
+              <div className="flex justify-between">
+                <span>ส่วนลด</span>
+                <span className="font-semibold text-emerald-600">฿0</span>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-baseline pt-2 border-t border-sky-200/60">
+              <span className="text-sm font-bold text-slate-800">ยอดรวมชำระ</span>
+              <span className="text-2xl font-black text-sky-600">
+                ฿{totalPrice.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {/* Terms Agreement Warning Box */}
+          <div className="rounded-2xl p-4 bg-amber-50/80 border border-amber-200/80 space-y-2.5">
+            <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>ข้อตกลงและเงื่อนไขการสั่งซื้อ</span>
+            </div>
+            <ul className="text-[11px] text-amber-900/80 space-y-1 list-disc list-inside leading-relaxed">
+              <li>กรุณาตรวจสอบข้อมูลสินค้าและแพ็กเกจให้ถูกต้องก่อนชำระเงิน</li>
+              <li>สินค้าดิจิทัลไม่สามารถเปลี่ยนหรือขอคืนเงินได้หลังจากระบบดำเนินการส่งมอบแล้ว</li>
+              <li>ระบบจะจัดส่งข้อมูลการใช้งานให้ทันทีในหน้ารายละเอียดคำสั่งซื้อหลังตรวจสอบยอดชำระ</li>
+            </ul>
+            <label className="flex items-start gap-2.5 pt-2.5 border-t border-amber-200/70 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={agreedTerms}
+                onChange={(e) => setAgreedTerms(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded text-sky-600 border-amber-300 focus:ring-sky-500"
+              />
+              <span className="text-xs font-bold text-slate-800 leading-tight">
+                ฉันได้อ่านและยอมรับข้อตกลงการสั่งซื้อเรียบร้อยแล้ว <span className="text-rose-500">*</span>
+              </span>
+            </label>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-600 flex items-start gap-2 animate-shake">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span className="font-medium">{error}</span>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading || !agreedTerms}
+            className="w-full py-4 px-6 rounded-2xl font-black text-sm text-white shadow-md transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 via-blue-600 to-sky-600 hover:from-sky-400 hover:to-blue-500 shadow-sky-500/25 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none cursor-pointer"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>กำลังสร้างคำสั่งซื้อ...</span>
+              </>
+            ) : (
+              <>
+                <span>ดำเนินการต่อ • ฿{totalPrice.toLocaleString()}</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
         </div>
       </form>
     </div>
