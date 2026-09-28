@@ -18,7 +18,8 @@ export interface FulfillmentResult {
  * Strict Lifecycle:
  * 1. Lock & verify order payment status (must be PAID or QUEUED)
  * 2. Idempotency check: prevent duplicate purchase if already fulfilled
- * 3. Resolve product mapping & provider route
+ * 3. Resolve exact external provider product ID mapping (FinShop / BYShop / etc.)
+ *    NEVER pass NayMos internal UUID to FinShop!
  * 4. Generate guaranteed unique reference_id (NMS-{order_number}-{order_id})
  * 5. Dispatch provider purchase through Central Router
  * 6. Record transaction & update order status safely
@@ -48,7 +49,6 @@ export async function fulfillOrder(orderId: string): Promise<FulfillmentResult> 
   const referenceId = `NMS-${orderNumber}-${order.id.slice(0, 8)}`;
 
   // 2. State & Idempotency check:
-  // If already SUCCESS or COMPLETED, never purchase again!
   if (order.status === 'SUCCESS' || order.status === 'COMPLETED') {
     const deliveredInfo = (order.player_data as any)?.delivered_info || '';
     return {
@@ -82,7 +82,6 @@ export async function fulfillOrder(orderId: string): Promise<FulfillmentResult> 
     .maybeSingle();
 
   if (existingTx && existingTx.status === 'SUCCESS') {
-    // Already executed successfully by provider! Update order to SUCCESS
     const now = new Date().toISOString();
     await supabase
       .from('orders')
@@ -111,29 +110,70 @@ export async function fulfillOrder(orderId: string): Promise<FulfillmentResult> 
     })
     .eq('id', order.id);
 
-  // 3. Resolve provider & target product
+  // 3. Resolve exact provider product mapping
   const playerData = (order.player_data as Record<string, any>) || {};
   let targetProviderId: string | undefined = undefined;
+  let externalProductCode: string | undefined = undefined;
   let targetRouteKey = 'GAME_TOPUP';
 
-  // Check if digital product / package
-  if (playerData.package_id) {
+  const packageId = order.digital_package_id || playerData.package_id;
+  const digitalProductId = order.digital_product_id || playerData.product_id;
+
+  if (packageId || digitalProductId || order.order_type === 'DIGITAL_PRODUCT') {
     targetRouteKey = 'PREMIUM_APP';
+
+    // Step 3a: Check explicit route for this package
+    if (packageId) {
+      const { data: route } = await supabase
+        .from('provider_routes')
+        .select('*, provider:providers(*), provider_product:provider_products(*)')
+        .eq('target_type', 'DIGITAL_PRODUCT_PACKAGE')
+        .eq('target_id', packageId)
+        .eq('is_active', true)
+        .order('priority', { ascending: true })
+        .maybeSingle();
+
+      if (route?.provider_id && route?.provider_product?.external_product_code) {
+        targetProviderId = route.provider_id;
+        externalProductCode = route.provider_product.external_product_code;
+      }
+    }
+
+    // Step 3b: Fallback to route by route_key / generic active mapping
+    if (!targetProviderId || !externalProductCode) {
+      const { data: genericRoute } = await supabase
+        .from('provider_routes')
+        .select('*, provider:providers(*), provider_product:provider_products(*)')
+        .eq('route_key', 'PREMIUM_APP')
+        .eq('is_active', true)
+        .order('priority', { ascending: true })
+        .maybeSingle();
+
+      if (genericRoute?.provider_id && genericRoute?.provider_product?.external_product_code) {
+        targetProviderId = genericRoute.provider_id;
+        externalProductCode = genericRoute.provider_product.external_product_code;
+      }
+    }
+  } else if (order.product_id) {
+    // Game top-up route lookup
+    const { data: gameRoute } = await supabase
+      .from('provider_routes')
+      .select('*, provider:providers(*), provider_product:provider_products(*)')
+      .eq('target_type', 'GAME_PRODUCT')
+      .eq('target_id', order.product_id)
+      .eq('is_active', true)
+      .order('priority', { ascending: true })
+      .maybeSingle();
+
+    if (gameRoute?.provider_id && gameRoute?.provider_product?.external_product_code) {
+      targetProviderId = gameRoute.provider_id;
+      externalProductCode = gameRoute.provider_product.external_product_code;
+    }
   }
 
-  // Query matching provider_product
-  const { data: provProduct } = await supabase
-    .from('provider_products')
-    .select('*, provider:providers(*)')
-    .eq('is_active', true)
-    .maybeSingle();
-
-  if (provProduct?.provider_id) {
-    targetProviderId = provProduct.provider_id;
-  }
-
-  // In production, reject if no real provider is available
-  if (process.env.NODE_ENV === 'production' && !targetProviderId) {
+  // Reject execution if provider product mapping is missing or invalid
+  if (!targetProviderId || !externalProductCode) {
+    const errorMsg = 'ยังไม่ได้ตั้งค่าคู่สินค้า (Product Mapping) ของ Provider สำหรับสินค้านี้';
     await supabase
       .from('orders')
       .update({
@@ -148,11 +188,11 @@ export async function fulfillOrder(orderId: string): Promise<FulfillmentResult> 
       order_number: orderNumber,
       status: 'PROVIDER_ERROR',
       reference_id: referenceId,
-      error: 'ยังไม่ได้ตั้งค่า Provider จริงสำหรับบริการนี้บน Production',
+      error: errorMsg,
     };
   }
 
-  // 4. Dispatch Provider Purchase
+  // 4. Dispatch Provider Purchase with EXTERNAL product code
   const executionReq: ProviderExecutionRequest = {
     provider_id: targetProviderId,
     route_key: targetRouteKey,
@@ -161,8 +201,9 @@ export async function fulfillOrder(orderId: string): Promise<FulfillmentResult> 
     payload: {
       order_id: order.id,
       order_number: orderNumber,
-      product_id: playerData.package_id || order.product_id,
-      customer: order.contact_email || order.user_id,
+      product_id: externalProductCode,
+      provider_product_id: externalProductCode,
+      customer: order.contact_email || order.user_id || 'customer',
       player_data: playerData,
     },
   };
@@ -171,7 +212,8 @@ export async function fulfillOrder(orderId: string): Promise<FulfillmentResult> 
 
   // 5. Update Order according to Provider Execution
   if (dispatchResult.success) {
-    const deliveredInfo = dispatchResult.data?.delivered_info || 
+    const deliveredInfo = dispatchResult.data?.stock_received || 
+                          dispatchResult.data?.delivered_info || 
                           dispatchResult.data?.info || 
                           dispatchResult.data?.code || 
                           'จัดส่งสินค้าสำเร็จเรียบร้อย';
@@ -202,7 +244,6 @@ export async function fulfillOrder(orderId: string): Promise<FulfillmentResult> 
       delivered_info: deliveredInfo,
     };
   } else {
-    // Provider failed or returned timeout/unknown
     const isTimeout = dispatchResult.error?.toLowerCase().includes('timeout') || dispatchResult.http_status === 504;
     const finalStatus = isTimeout ? 'UNKNOWN' : 'PROVIDER_ERROR';
 

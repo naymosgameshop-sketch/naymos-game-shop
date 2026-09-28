@@ -36,6 +36,7 @@ export async function ensurePaymentForOrder(
   let amount: number = rpc?.amount != null ? Number(rpc.amount) : 0;
   let gameId: string | null = rpc?.game_id ?? null;
   let productId: string | null = rpc?.product_id ?? null;
+  let orderData: any = null;
 
   {
     const { data: orderRows } = await supabase.rpc('get_order_by_number', {
@@ -43,12 +44,26 @@ export async function ensurePaymentForOrder(
     });
     const order = Array.isArray(orderRows) ? orderRows[0] : orderRows;
     if (!order && !orderId) {
-      return { success: false, message: 'ไม่พบออเดอร์' };
-    }
-    if (order) {
+      // Direct query fallback
+      const { data: directOrder } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('order_number', num)
+        .maybeSingle();
+      if (!directOrder) {
+        return { success: false, message: 'ไม่พบออเดอร์' };
+      }
+      orderData = directOrder;
+      orderId = directOrder.id;
+      orderStatus = directOrder.status;
+      amount = Number(directOrder.total || directOrder.amount || 0);
+      gameId = directOrder.game_id;
+      productId = directOrder.product_id;
+    } else if (order) {
+      orderData = order;
       orderId = orderId ?? order.id;
       orderStatus = orderStatus || order.status;
-      const orderTotal = Number(order.total);
+      const orderTotal = Number(order.total || order.amount || 0);
       if (!amount || amount === 0) {
         amount = orderTotal;
       }
@@ -61,12 +76,24 @@ export async function ensurePaymentForOrder(
     return { success: false, message: 'ไม่พบออเดอร์' };
   }
 
-  if (rpc?.payment_id && rpc.payment_status === 'PENDING') {
+  // Resolve display names for game topup OR digital products
+  let resolvedGameName: string | undefined = undefined;
+  let resolvedProductName: string | undefined = undefined;
+
+  const playerData = (orderData?.player_data as Record<string, any>) || {};
+  if (playerData.product_name) {
+    resolvedGameName = 'แอปพรีเมียม / สินค้าดิจิทัล';
+    resolvedProductName = `${playerData.product_name} - ${playerData.package_name || ''}`;
+  } else if (gameId || productId) {
     const [{ data: game }, { data: product }] = await Promise.all([
       gameId ? supabase.from('games').select('name').eq('id', gameId).maybeSingle() : Promise.resolve({ data: null }),
       productId ? supabase.from('products').select('name').eq('id', productId).maybeSingle() : Promise.resolve({ data: null }),
     ]);
+    resolvedGameName = game?.name;
+    resolvedProductName = product?.name;
+  }
 
+  if (rpc?.payment_id && rpc.payment_status === 'PENDING') {
     return {
       success: true,
       order_number: num,
@@ -76,8 +103,8 @@ export async function ensurePaymentForOrder(
       payment_reference: rpc.payment_reference,
       qr_data: rpc.qr_data,
       expires_at: rpc.expires_at,
-      game_name: game?.name,
-      product_name: product?.name,
+      game_name: resolvedGameName,
+      product_name: resolvedProductName,
     };
   }
 
@@ -116,11 +143,6 @@ export async function ensurePaymentForOrder(
     return { success: false, message: 'บันทึกการชำระเงินไม่สำเร็จ' };
   }
 
-  const [{ data: game }, { data: product }] = await Promise.all([
-    gameId ? supabase.from('games').select('name').eq('id', gameId).maybeSingle() : Promise.resolve({ data: null }),
-    productId ? supabase.from('products').select('name').eq('id', productId).maybeSingle() : Promise.resolve({ data: null }),
-  ]);
-
   return {
     success: true,
     order_number: num,
@@ -130,7 +152,7 @@ export async function ensurePaymentForOrder(
     payment_reference: created.payment.payment_reference ?? null,
     qr_data: created.qrData ?? null,
     expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    game_name: game?.name,
-    product_name: product?.name,
+    game_name: resolvedGameName,
+    product_name: resolvedProductName,
   };
 }

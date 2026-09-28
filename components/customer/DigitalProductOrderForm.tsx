@@ -1,73 +1,58 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
-  Sparkles, ShieldCheck, Zap, CheckCircle2, QrCode, ArrowRight, Loader2, 
-  Copy, Check, AlertCircle, Info, FileText, ChevronDown, ChevronUp, Lock, Mail
+  Sparkles, ShieldCheck, Zap, CheckCircle2, ArrowRight, Loader2, 
+  AlertCircle, Info, ChevronRight, Minus, Plus, ShoppingCart, Check,
+  Clock, Flame, HelpCircle
 } from 'lucide-react';
-import { PromptPayQRCard } from './PromptPayQRCard';
 import type { DigitalProduct, DigitalProductPackage } from '@/types/digital-product';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
-export function DigitalProductOrderForm({ product }: { product: DigitalProduct }) {
+interface DigitalProductOrderFormProps {
+  product: DigitalProduct;
+}
+
+export function DigitalProductOrderForm({ product }: DigitalProductOrderFormProps) {
   const router = useRouter();
-  const packages = (product.packages || []).filter(p => p.is_active !== false);
-  const [selectedPkgId, setSelectedPkgId] = useState<string>(packages[0]?.id || '');
+  const packages = useMemo(() => {
+    return (product.packages || []).filter(p => p.is_active !== false);
+  }, [product.packages]);
 
-  // Form Fields (Only shown if enabled in product metadata)
+  const [selectedPkgId, setSelectedPkgId] = useState<string>(packages[0]?.id || '');
+  const [quantity, setQuantity] = useState<number>(1);
+
+  // Form Fields (Dynamic based on product configuration)
   const [contactEmail, setContactEmail] = useState('');
   const [contactPassword, setContactPassword] = useState('');
   const [contactNotes, setContactNotes] = useState('');
 
   // Mandatory Agreement Checkbox
   const [agreedTerms, setAgreedTerms] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [orderCreated, setOrderCreated] = useState<any | null>(null);
-  const [copiedOrder, setCopiedOrder] = useState(false);
 
-  // Store PromptPay settings
-  const [store, setStore] = useState({ 
-    promptpay_id: '0988251064', 
-    account_name: 'ศักดาวิชญ์ คำใจ', 
-    bank_name: 'พร้อมเพย์' 
-  });
-
-  useEffect(() => {
-    fetch('/api/settings')
-      .then((r) => r.json())
-      .then((j) => {
-        if (j?.success && j?.settings) {
-          setStore({
-            promptpay_id: j.settings.promptpay_id || '0988251064',
-            account_name: j.settings.account_name || 'ศักดาวิชญ์ คำใจ',
-            bank_name: j.settings.bank_name || 'พร้อมเพย์',
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const selectedPkg = packages.find(p => p.id === selectedPkgId) || packages[0];
+  const selectedPkg = useMemo(() => {
+    return packages.find(p => p.id === selectedPkgId) || packages[0];
+  }, [packages, selectedPkgId]);
 
   const meta = (product as any)?.metadata || {};
   const askEmail = Boolean(meta.ask_email);
   const askPassword = Boolean(meta.ask_password);
-  const termsContent = meta.terms || '1. สินค้าเป็นแอปพรีเมียมตามระยะเวลาที่ระบุในแพ็กเกจ\n2. ห้ามเปลี่ยนรหัสผ่าน หรือแก้ไขข้อมูลบัญชีโดยไม่ได้รับอนุญาต\n3. ทางร้านรับประกันการใช้งานตลอดอายุของแพ็กเกจ\n4. เมื่อชำระเงินแล้ว ระบบจะจัดส่งรหัสหรือข้อมูลบัญชีให้ในประวัติการสั่งซื้อ';
 
-  // Parse description/features into checklist items
-  const rawDescription = product.description || meta.details || meta.instructions || 'บริการสตรีมมิ่งคุณภาพสูง\nความคมชัดระดับ 4K\nรับชมได้ทันทีหลังชำระเงิน\nรับประกันตลอดอายุการใช้งาน';
-  const checklistItems = rawDescription
-    .split('\n')
-    .map((line: string) => line.trim())
-    .filter((line: string) => line.length > 0);
+  const unitPrice = Number(selectedPkg?.price || 0);
+  const totalPrice = unitPrice * quantity;
+
+  const handleQuantityChange = (delta: number) => {
+    setQuantity(prev => Math.max(1, Math.min(99, prev + delta)));
+  };
 
   const handleOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPkg) {
-      setError('กรุณาเลือกแพ็กเกจ');
+      setError('กรุณาเลือกแพ็กเกจที่ต้องการสั่งซื้อ');
       return;
     }
     if (!agreedTerms) {
@@ -92,266 +77,333 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           packageId: selectedPkg.id,
+          quantity,
           contactEmail: contactEmail.trim(),
           contactPhone: '',
           notes: contactNotes.trim(),
           customFields: {
             account_email: contactEmail.trim(),
             account_password: contactPassword.trim(),
-            agreed_terms: true,
           },
         }),
       });
 
       const data = await res.json();
-      if (res.ok && data.success) {
-        // Redirect directly to the QR scan & payment page
-        router.push(`/pay/${data.order.order_number}`);
-        return;
-      } else {
-        setError(data.error || 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ');
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'ไม่สามารถสร้างคำสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง');
       }
-    } catch {
-      setError('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
-    } finally {
+
+      const redirectUrl = data.order?.redirect_url || `/pay/${data.order?.order_number}`;
+      router.push(redirectUrl);
+    } catch (err: any) {
+      setError(err.message || 'เกิดข้อผิดพลาดในการสั่งซื้อ');
       setLoading(false);
     }
   };
 
-  const copyOrderNumber = () => {
-    if (!orderCreated?.order_number) return;
-    navigator.clipboard.writeText(orderCreated.order_number);
-    setCopiedOrder(true);
-    setTimeout(() => setCopiedOrder(false), 2000);
-  };
-
-  if (orderCreated) {
-    return (
-      <div className="bg-white border border-sky-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 mb-1">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-          <h2 className="text-xl font-black text-slate-900">สั่งซื้อสำเร็จ กรุณาชำระเงิน</h2>
-          <p className="text-xs text-slate-500">
-            โอนเงินตามยอดที่ระบุ และรอแอดมินยืนยันยอดเพื่อส่งรหัสเข้าใน <span className="font-bold text-sky-600">ประวัติการสั่งซื้อ</span> ทันที
-          </p>
-        </div>
-
-        {/* Order Details Banner */}
-        <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div>
-            <span className="text-slate-500">หมายเลขคำสั่งซื้อ:</span>
-            <div className="font-mono font-bold text-sky-700 text-sm flex items-center gap-1.5 mt-0.5">
-              {orderCreated.order_number}
-              <button
-                type="button"
-                onClick={copyOrderNumber}
-                className="text-slate-400 hover:text-sky-600 transition"
-                title="คัดลอก"
-              >
-                {copiedOrder ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-          <div className="sm:text-right">
-            <span className="text-slate-500">ยอดชำระ:</span>
-            <div className="font-black text-lg text-emerald-600">฿{orderCreated.price?.toLocaleString()}</div>
-          </div>
-        </div>
-
-        {/* PromptPay QR */}
-        <div className="flex justify-center">
-          <PromptPayQRCard
-            amount={orderCreated.price}
-            orderNumber={orderCreated.order_number}
-            promptpayId={store.promptpay_id}
-            accountName={store.account_name}
-            bankName={store.bank_name}
-            showDetails={true}
-          />
-        </div>
-
-        {/* Action Button */}
-        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
-          <button
-            type="button"
-            onClick={() => router.push(`/order-tracking?number=${orderCreated.order_number}`)}
-            className="flex-1 py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition shadow-sm"
-          >
-            ไปที่หน้าติดตามคำสั่งซื้อ / รับสินค้า <ArrowRight className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setOrderCreated(null)}
-            className="py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs transition"
-          >
-            สั่งซื้อรายการอื่น
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const pkgAny = selectedPkg as any;
-  const stockCount = pkgAny?.stock ?? pkgAny?.stock_quantity ?? 99;
-  const isOutOfStock = stockCount <= 0;
-
   return (
-    <form onSubmit={handleOrder} className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
-      {/* Package Selector (If multiple packages exist) */}
-      {packages.length > 1 && (
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-sky-500" /> เลือกแพ็กเกจ:
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {packages.map((pkg) => {
-              const isSelected = selectedPkg?.id === pkg.id;
-              return (
+    <div className="w-full">
+      <form onSubmit={handleOrder} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Product Info & Package Selection */}
+        <div className="lg:col-span-7 space-y-6">
+          {/* Header Product Card */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-blue-50/80 via-indigo-50/30 to-transparent rounded-full -mr-20 -mt-20 pointer-events-none" />
+
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-5">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center p-2 text-white shadow-md shadow-blue-500/20 shrink-0">
+                {product.icon || (product as any).image_url ? (
+                  <img
+                    src={product.icon || (product as any).image_url}
+                    alt={product.name}
+                    className="w-full h-full object-contain drop-shadow"
+                  />
+                ) : (
+                  <Sparkles className="w-10 h-10 text-white" />
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200">
+                    <Sparkles className="w-3 h-3" />
+                    แอปพรีเมียม
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200">
+                    <ShieldCheck className="w-3 h-3" />
+                    แท้ถูกลิขสิทธิ์ 100%
+                  </span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">
+                  {product.name}
+                </h1>
+                <p className="text-sm text-slate-500 mt-1 line-clamp-2">
+                  {product.description || (product as any).short_description || 'บริการแอปสตรีมมิ่งและโปรแกรมพรีเมียม พร้อมใช้งานทันที'}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Guarantees Badge row */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-6 pt-6 border-t border-slate-100">
+              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Zap className="w-3.5 h-3.5" />
+                </div>
+                <span>ส่งไวอัตโนมัติ</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                </div>
+                <span>ประกันตลอดอายุ</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <Clock className="w-3.5 h-3.5" />
+                </div>
+                <span>ดูแล 24 ชม.</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Package Selection */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <span className="w-2 h-6 bg-blue-600 rounded-full" />
+                เลือกแพ็กเกจที่ต้องการ
+              </h2>
+              <span className="text-xs text-slate-400">
+                {packages.length} ตัวเลือก
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              {packages.map((pkg) => {
+                const isSelected = selectedPkg?.id === pkg.id;
+                return (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => setSelectedPkgId(pkg.id)}
+                    className={`relative p-4 rounded-2xl border text-left transition-all duration-200 ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20'
+                        : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-slate-800 text-base">{pkg.name}</div>
+                        {pkg.duration && (
+                          <div className="text-xs text-blue-600 font-medium mt-0.5">
+                            ระยะเวลา: {pkg.duration}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-base font-bold text-blue-600">
+                          ฿{Number(pkg.price).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <div className="absolute top-2 right-2">
+                        <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Additional Input Fields if required */}
+          {(askEmail || askPassword) && (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm space-y-4">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <span className="w-2 h-6 bg-blue-600 rounded-full" />
+                ข้อมูลสำหรับรับบริการ
+              </h2>
+
+              <div className="space-y-4 pt-1">
+                {askEmail && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      อีเมลสำหรับรับบริการ <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      placeholder="เช่น example@gmail.com"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                      required
+                    />
+                  </div>
+                )}
+
+                {askPassword && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      รหัสผ่านสำหรับรับบริการ <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={contactPassword}
+                      onChange={(e) => setContactPassword(e.target.value)}
+                      placeholder="กรอกรหัสผ่าน (หากมี)"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                      required
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Order Summary, Terms & CTA (Sticky on Desktop) */}
+        <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
+          {/* Order Summary Card */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-blue-100/80 shadow-sm space-y-6">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-4">
+              <ShoppingCart className="w-5 h-5 text-blue-600" />
+              สรุปรายการสั่งซื้อ
+            </h2>
+
+            {/* Selected Item Preview */}
+            <div className="flex items-center gap-4 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 p-1 flex items-center justify-center shrink-0">
+                {product.icon || (product as any).image_url ? (
+                  <img
+                    src={product.icon || (product as any).image_url}
+                    alt={product.name}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <Sparkles className="w-6 h-6 text-white" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-slate-800 text-sm truncate">
+                  {product.name}
+                </div>
+                <div className="text-xs text-blue-600 font-medium">
+                  {selectedPkg?.name || 'แพ็กเกจ'}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  ราคาต่อชิ้น: ฿{unitPrice.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* Quantity Selector */}
+            <div className="flex items-center justify-between py-2 border-y border-slate-100">
+              <div>
+                <span className="text-sm font-semibold text-slate-700 block">จำนวนสินค้า</span>
+                <span className="text-xs text-slate-400">เลือกจำนวนที่ต้องการ</span>
+              </div>
+              <div className="flex items-center gap-3 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60">
                 <button
-                  key={pkg.id}
                   type="button"
-                  onClick={() => setSelectedPkgId(pkg.id)}
-                  className={`p-2.5 rounded-2xl border text-left transition-all ${
-                    isSelected
-                      ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-300/40 text-sky-950 font-bold'
-                      : 'border-slate-200 hover:border-sky-300 text-slate-700'
-                  }`}
+                  onClick={() => handleQuantityChange(-1)}
+                  disabled={quantity <= 1 || loading}
+                  className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-600 hover:text-blue-600 disabled:opacity-40 transition-colors"
                 >
-                  <div className="text-xs font-bold truncate">{pkg.name}</div>
-                  <div className="text-xs text-emerald-600 font-mono mt-0.5">฿{Number(pkg.price).toLocaleString()}</div>
+                  <Minus className="w-4 h-4" />
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                <span className="font-bold text-slate-800 text-sm w-6 text-center">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(1)}
+                  disabled={quantity >= 99 || loading}
+                  className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-600 hover:text-blue-600 disabled:opacity-40 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
 
-      {/* Product Details Section (Matching FinShop UI checklist) */}
-      
+            {/* Calculation Lines */}
+            <div className="space-y-2.5 text-sm">
+              <div className="flex justify-between text-slate-500">
+                <span>ราคาต่อชิ้น</span>
+                <span>฿{unitPrice.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>จำนวน</span>
+                <span>{quantity} ชิ้น</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>ส่วนลด</span>
+                <span className="text-emerald-600">฿0</span>
+              </div>
+              <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
+                <span className="text-base font-bold text-slate-800">ยอดรวมทั้งสิ้น</span>
+                <span className="text-2xl font-extrabold text-blue-600">
+                  ฿{totalPrice.toLocaleString()}
+                </span>
+              </div>
+            </div>
 
-      {/* Optional Inputs (Only rendered if toggled in admin) */}
-      {(askEmail || askPassword) && (
-        <div className="p-4 rounded-2xl bg-sky-50/60 border border-sky-100 space-y-3">
-          <div className="text-xs font-bold text-sky-950 flex items-center gap-1.5">
-            <Info className="w-4 h-4 text-sky-600" /> ข้อมูลสำหรับการรับบริการ
-          </div>
-          {askEmail && (
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                <Mail className="w-3.5 h-3.5 text-slate-400" /> อีเมลของคุณ <span className="text-red-500">*</span>
+            {/* Terms Agreement Section */}
+            <div className="bg-amber-50/70 border border-amber-200/70 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-2 text-amber-800 font-bold text-xs uppercase tracking-wider">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                ข้อตกลงและเงื่อนไขก่อนสั่งซื้อ
+              </div>
+              <ul className="text-xs text-amber-900/80 space-y-1.5 list-disc list-inside">
+                <li>กรุณาตรวจสอบแพ็กเกจและข้อมูลให้ถูกต้อง</li>
+                <li>สินค้าดิจิทัลไม่สามารถเปลี่ยนหรือคืนเงินได้หลังจัดส่งแล้ว</li>
+                <li>จัดส่งข้อมูลการใช้งานทันทีในระบบหลังชำระเงิน</li>
+              </ul>
+              <label className="flex items-start gap-2.5 pt-2 border-t border-amber-200/60 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={agreedTerms}
+                  onChange={(e) => setAgreedTerms(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded text-blue-600 border-amber-300 focus:ring-blue-500"
+                />
+                <span className="text-xs font-semibold text-slate-700 leading-tight">
+                  ฉันได้อ่านและยอมรับข้อตกลงการสั่งซื้อเรียบร้อยแล้ว <span className="text-red-500">*</span>
+                </span>
               </label>
-              <input
-                type="email"
-                required
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                placeholder="example@gmail.com"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 bg-white"
-              />
             </div>
-          )}
-          {askPassword && (
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                <Lock className="w-3.5 h-3.5 text-slate-400" /> รหัสผ่านของคุณ <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="password"
-                required
-                value={contactPassword}
-                onChange={(e) => setContactPassword(e.target.value)}
-                placeholder="กรอกรหัสผ่าน"
-                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-sky-500 bg-white"
-              />
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Mandatory Terms & Conditions Checkbox */}
-      <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
-        <label className="flex items-start gap-2.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={agreedTerms}
-            onChange={(e) => setAgreedTerms(e.target.checked)}
-            className="w-4 h-4 mt-0.5 rounded text-sky-600 border-amber-300 focus:ring-sky-500"
-          />
-          <span className="text-xs text-slate-800 font-semibold leading-relaxed">
-            ฉันได้อ่านและยอมรับ <span className="text-sky-700 underline font-bold" onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }}>ข้อตกลงการสั่งซื้อและเงื่อนไข</span> เรียบร้อยแล้ว <span className="text-red-500">*</span>
-          </span>
-        </label>
-      </div>
+            {/* Error Message if any */}
+            {error && (
+              <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
 
-      {/* Terms Modal */}
-      {showTermsModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-4 shadow-xl border border-slate-100">
-            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-sky-600" /> ข้อตกลงและเงื่อนไขการสั่งซื้อ
-            </h4>
-            <div className="max-h-60 overflow-y-auto p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-              {termsContent}
-            </div>
+            {/* Action Button */}
             <button
-              type="button"
-              onClick={() => {
-                setAgreedTerms(true);
-                setShowTermsModal(false);
-              }}
-              className="w-full py-2.5 rounded-xl bg-sky-600 text-white font-bold text-xs hover:bg-sky-700 transition"
+              type="submit"
+              disabled={loading || !agreedTerms}
+              className="w-full py-4 px-6 rounded-2xl font-bold text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-500/25 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              รับทราบและยอมรับข้อตกลง
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>กำลังสร้างคำสั่งซื้อ...</span>
+                </>
+              ) : (
+                <>
+                  <span>ดำเนินการต่อ • ฿{totalPrice.toLocaleString()}</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
             </button>
           </div>
         </div>
-      )}
-
-      {/* Error message */}
-      {error && (
-        <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-600 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Stock and Price Row (Matching FIN Shop Footer) */}
-      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-        <div className="text-xs text-slate-500 font-medium">
-          คงเหลือ: <span className="font-bold text-slate-800 font-mono">{stockCount}</span> ชิ้น
-        </div>
-        <div className="text-right">
-          <span className="text-xl sm:text-2xl font-black text-rose-600 font-mono">
-            ฿{Number(selectedPkg?.price || 0).toLocaleString()}
-          </span>
-          <span className="text-xs text-slate-400 ml-1">/ ชิ้น</span>
-        </div>
-      </div>
-
-      {/* Submit Button (Red/Coral like FIN Shop) */}
-      <button
-        type="submit"
-        disabled={loading || isOutOfStock || !agreedTerms}
-        className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-sm ${
-          isOutOfStock
-            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            : !agreedTerms
-            ? 'bg-rose-400 text-white/80 cursor-not-allowed'
-            : 'bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white shadow-rose-200'
-        }`}
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" /> กำลังดำเนินการ...
-          </>
-        ) : isOutOfStock ? (
-          'สินค้าหมดชั่วคราว'
-        ) : (
-          'ดำเนินการต่อ'
-        )}
-      </button>
-    </form>
+      </form>
+    </div>
   );
 }

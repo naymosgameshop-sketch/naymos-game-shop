@@ -7,7 +7,11 @@ export type OrderStatus =
   | "FAILED"
   | "REFUND_PENDING"
   | "REFUNDED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "PROVIDER_ERROR"
+  | "UNKNOWN";
+
+export type OrderType = "GAME_TOPUP" | "DIGITAL_PRODUCT";
 
 export type OrderItemStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED";
 
@@ -23,8 +27,8 @@ export interface CartItem {
 export interface OrderItem {
   id: string;
   orderId: string;
-  productId: string;
-  gameId: string;
+  productId?: string | null;
+  gameId?: string | null;
   quantity: number;
   unitPrice: number;
   costPrice: number;
@@ -38,12 +42,15 @@ export interface OrderItem {
 export interface Order {
   id: string;
   order_number: string;
+  order_type?: OrderType;
   user_id?: string | null;
   guest_email?: string | null;
   guest_phone?: string | null;
-  game_id: string;
-  product_id: string;
-  amount: number;
+  game_id?: string | null;
+  product_id?: string | null;
+  digital_product_id?: string | null;
+  digital_package_id?: string | null;
+  amount?: number;
   total: number;
   subtotal?: number;
   discount?: number;

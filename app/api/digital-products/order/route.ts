@@ -17,15 +17,13 @@ async function getSupabase() {
   }
 }
 
-// NOTE: Provider purchase is NOT fired at order creation.
-// The real provider API purchase runs only AFTER payment is confirmed
-// (admin manual confirm / slip verification) via the central provider router.
 export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser();
     const body = await req.json();
     const {
       packageId,
+      quantity = 1,
       contactEmail,
       contactPhone,
       notes,
@@ -35,6 +33,8 @@ export async function POST(req: NextRequest) {
     if (!packageId) {
       return NextResponse.json({ error: 'กรุณาเลือกแพ็กเกจที่ต้องการสั่งซื้อ' }, { status: 400 });
     }
+
+    const qty = Math.max(1, Math.min(99, Math.floor(Number(quantity) || 1)));
 
     const supabase = await getSupabase();
     let pkg: any = null;
@@ -70,7 +70,10 @@ export async function POST(req: NextRequest) {
     }
 
     const orderNumber = generateOrderNumber();
-    const price = Number(pkg.price) || 0;
+    const unitPrice = Number(pkg.price) || 0;
+    const subtotal = unitPrice * qty;
+    const discount = 0;
+    const total = subtotal - discount;
 
     const playerData = {
       type: 'DIGITAL_PRODUCT',
@@ -79,6 +82,8 @@ export async function POST(req: NextRequest) {
       package_id: pkg.id,
       package_name: pkg.name,
       duration: pkg.duration || '',
+      quantity: qty,
+      unit_price: unitPrice,
       contact_email: contactEmail || user?.email || '',
       contact_phone: contactPhone || '',
       notes: notes || '',
@@ -86,18 +91,21 @@ export async function POST(req: NextRequest) {
       created_via: 'digital_storefront',
     };
 
-    // Create Order in DB using standard total/subtotal columns
+    // Create Order with clean schema - NO fake game_id or fake product_id
     const orderPayload: Record<string, any> = {
       order_number: orderNumber,
+      order_type: 'DIGITAL_PRODUCT',
       user_id: user?.id || null,
-      total: price,
-      subtotal: price,
-      discount: 0,
+      digital_product_id: UUID_REGEX.test(prod?.id) ? prod.id : null,
+      digital_package_id: UUID_REGEX.test(pkg?.id) ? pkg.id : null,
+      subtotal,
+      discount,
+      total,
+      amount: total,
       status: 'PENDING_PAYMENT',
       player_data: playerData,
     };
 
-    // Try primary insert with contact_email
     let { data: order, error: orderErr } = await supabase
       .from('orders')
       .insert({
@@ -108,37 +116,38 @@ export async function POST(req: NextRequest) {
       .select()
       .maybeSingle();
 
-    // If column contact_email fails in cache, fallback to guest_email or core payload
-    if (orderErr && (orderErr.message?.includes('contact_email') || orderErr.message?.includes('column'))) {
-      const retry1 = await supabase
+    // Resilient fallback if optional columns are absent in older cached schemas
+    if (orderErr) {
+      console.warn('First order insert attempt failed, attempting fallback payload:', orderErr.message);
+
+      // Attempt fallback without digital_product_id / digital_package_id if migration 040 is not yet applied
+      const fallbackPayload = {
+        order_number: orderNumber,
+        user_id: user?.id || null,
+        subtotal,
+        discount,
+        total,
+        amount: total,
+        status: 'PENDING_PAYMENT',
+        player_data: playerData,
+      };
+
+      const retry = await supabase
         .from('orders')
-        .insert({
-          ...orderPayload,
-          guest_email: contactEmail || user?.email || null,
-          guest_phone: contactPhone || null,
-        })
+        .insert(fallbackPayload)
         .select()
         .maybeSingle();
 
-      if (!retry1.error) {
-        order = retry1.data;
+      if (!retry.error && retry.data) {
+        order = retry.data;
         orderErr = null;
       } else {
-        const retry2 = await supabase
-          .from('orders')
-          .insert(orderPayload)
-          .select()
-          .maybeSingle();
-        if (!retry2.error) {
-          order = retry2.data;
-          orderErr = null;
-        }
+        console.error('All order insert attempts failed:', retry.error || orderErr);
+        // Friendly client error message - never expose internal DB columns or SQL errors
+        return NextResponse.json({ 
+          error: 'ไม่สามารถสร้างคำสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง หรือติดต่อแอดมิน' 
+        }, { status: 500 });
       }
-    }
-
-    if (orderErr) {
-      console.error('Create digital order DB error:', orderErr);
-      return NextResponse.json({ error: 'ไม่สามารถสร้างคำสั่งซื้อได้: ' + orderErr.message }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -146,14 +155,18 @@ export async function POST(req: NextRequest) {
       order: {
         id: order?.id,
         order_number: orderNumber,
-        product_name: prod?.name,
+        product_name: prod?.name || 'แอปพรีเมียม',
         package_name: pkg.name,
-        price: price,
+        price: total,
         status: 'PENDING_PAYMENT',
+        redirect_url: `/pay/${orderNumber}`,
       },
       message: 'สร้างคำสั่งซื้อสำเร็จ กรุณาชำระเงิน',
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    console.error('Digital order creation exception:', err);
+    return NextResponse.json({ 
+      error: 'ระบบขัดข้องชั่วคราว ไม่สามารถสร้างคำสั่งซื้อได้' 
+    }, { status: 500 });
   }
 }
