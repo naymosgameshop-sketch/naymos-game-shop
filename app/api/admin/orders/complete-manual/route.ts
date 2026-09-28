@@ -32,8 +32,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'ไม่พบออเดอร์' }, { status: 404 });
     }
 
-    // P0: DIGITAL PRODUCT ห้าม MANUAL SUCCESS
-    if (order.order_type === 'DIGITAL_PRODUCT') {
+    // P0: DIGITAL PRODUCT ห้าม MANUAL SUCCESS (Enforce strictly on backend)
+    if (order.order_type === 'DIGITAL_PRODUCT' || (order as any).digital_package_id || (order.player_data as any)?.digital_order) {
       return NextResponse.json({
         success: false,
         message: 'สินค้าดิจิทัลไม่สามารถกดเสร็จสิ้นด้วยตนเองได้ ต้องดำเนินการจัดส่งผ่าน Provider Fulfillment เท่านั้น',

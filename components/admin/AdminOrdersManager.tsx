@@ -146,8 +146,10 @@ export function AdminOrdersManager({
   const handleFulfillDigital = async (orderId: string) => {
     setFulfillLoadingId(orderId);
     try {
-      const res = await fetch(`/api/admin/orders/${orderId}/fulfill`, {
+      const res = await fetch('/api/admin/orders/fulfill-provider', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
