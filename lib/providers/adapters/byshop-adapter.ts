@@ -102,17 +102,14 @@ export class ByShopAdapter extends BaseProviderAdapter {
         provider_code: this.provider.code,
         action,
         reference_id,
-        error: {
-          code: 'AUTH_FAILED',
-          message: 'BYShop API Key ยังไม่ได้ตั้งค่า',
-          retryable: false,
-        },
+        http_status: 401,
+        error: 'BYShop API Key ยังไม่ได้ตั้งค่า',
         duration_ms: Date.now() - start,
       };
     }
 
     try {
-      if (action === 'CHECK_BALANCE' || action === 'HEALTH_CHECK' || action === 'PING') {
+      if (action === 'check_balance' || action === 'ping') {
         const params = new URLSearchParams();
         params.append('keyapi', apiKey);
 
@@ -126,6 +123,7 @@ export class ByShopAdapter extends BaseProviderAdapter {
         if (data && (data.status === 'success' || data.money !== undefined)) {
           return {
             success: true,
+            http_status: 200,
             provider_id: this.provider.id,
             provider_code: this.provider.code,
             action,
@@ -141,22 +139,20 @@ export class ByShopAdapter extends BaseProviderAdapter {
           provider_code: this.provider.code,
           action,
           reference_id,
-          error: {
-            code: 'PROVIDER_ERROR',
-            message: data?.message || 'ไม่สามารถตรวจสอบยอดเงิน BYShop ได้',
-            retryable: true,
-          },
+        http_status: 400,
+          error: String(data?.message || 'ไม่สามารถตรวจสอบยอดเงิน BYShop ได้'),
           duration_ms: Date.now() - start,
         };
       }
 
-      if (action === 'SYNC_PRODUCTS' || action === 'GET_PRODUCTS') {
+      if (action === 'get_products') {
         const res = await fetch(`${this.baseUrl}/product`, { cache: 'no-store' });
         const data = await res.json().catch(() => null);
 
         if (Array.isArray(data)) {
           return {
             success: true,
+            http_status: 200,
             provider_id: this.provider.id,
             provider_code: this.provider.code,
             action,
@@ -172,16 +168,13 @@ export class ByShopAdapter extends BaseProviderAdapter {
           provider_code: this.provider.code,
           action,
           reference_id,
-          error: {
-            code: 'DATA_ERROR',
-            message: 'ไม่สามารถดึงข้อมูลสินค้า BYShop ได้',
-            retryable: true,
-          },
+        http_status: 400,
+          error: String('ไม่สามารถดึงข้อมูลสินค้า BYShop ได้'),
           duration_ms: Date.now() - start,
         };
       }
 
-      if (action === 'PURCHASE' || action === 'BUY') {
+      if (action === 'purchase') {
         const productId = payload?.product_id || payload?.id;
         const customer = payload?.customer || payload?.username_customer || 'customer';
 
@@ -201,6 +194,7 @@ export class ByShopAdapter extends BaseProviderAdapter {
         if (data && data.status === 'success') {
           return {
             success: true,
+            http_status: 200,
             provider_id: this.provider.id,
             provider_code: this.provider.code,
             action,
@@ -223,16 +217,13 @@ export class ByShopAdapter extends BaseProviderAdapter {
           provider_code: this.provider.code,
           action,
           reference_id,
-          error: {
-            code: 'PURCHASE_FAILED',
-            message: data?.message || 'การสั่งซื้อผ่าน BYShop ล้มเหลว',
-            retryable: false,
-          },
+        http_status: 400,
+          error: String(data?.message || 'การสั่งซื้อผ่าน BYShop ล้มเหลว'),
           duration_ms: Date.now() - start,
         };
       }
 
-      if (action === 'GET_HISTORY') {
+      if (action === 'get_history') {
         const params = new URLSearchParams();
         params.append('keyapi', apiKey);
         if (payload?.order_id) params.append('orderid', String(payload.order_id));
@@ -247,6 +238,7 @@ export class ByShopAdapter extends BaseProviderAdapter {
         const data = await res.json().catch(() => null);
         return {
           success: true,
+          http_status: 200,
           provider_id: this.provider.id,
           provider_code: this.provider.code,
           action,
@@ -262,11 +254,8 @@ export class ByShopAdapter extends BaseProviderAdapter {
         provider_code: this.provider.code,
         action,
         reference_id,
-        error: {
-          code: 'UNSUPPORTED_ACTION',
-          message: `BYShop ไม่รองรับ action: ${action}`,
-          retryable: false,
-        },
+        http_status: 401,
+        error: 'BYShop API Key ยังไม่ได้ตั้งค่า',
         duration_ms: Date.now() - start,
       };
     } catch (err: any) {
@@ -276,11 +265,8 @@ export class ByShopAdapter extends BaseProviderAdapter {
         provider_code: this.provider.code,
         action,
         reference_id,
-        error: {
-          code: 'NETWORK_ERROR',
-          message: err.message || 'เกิดข้อผิดพลาดในการติดต่อ BYShop',
-          retryable: true,
-        },
+        http_status: 401,
+        error: 'BYShop API Key ยังไม่ได้ตั้งค่า',
         duration_ms: Date.now() - start,
       };
     }

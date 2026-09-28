@@ -98,6 +98,7 @@ const getCachedProductCategories = unstable_cache(
   async (): Promise<ProductCategory[]> => {
     try {
       const supabase = createPublicClient();
+      if (!supabase) return MOCK_GAMES.map(mockToGameWithDetails);
       const { data, error } = await supabase
         .from("product_categories")
         .select("id, slug, name, description, is_active, sort_order, created_at, updated_at")
@@ -137,6 +138,7 @@ export const getActiveGames = cache(async (): Promise<GameWithDetails[]> => {
     async (): Promise<GameWithDetails[]> => {
       try {
         const supabase = createPublicClient();
+        if (!supabase) return MOCK_GAMES.map(mockToGameWithDetails);
         const { data: dbGames, error } = await supabase
           .from("games")
           .select(
@@ -181,6 +183,7 @@ export const getGameBySlug = cache(
       async (s: string): Promise<GameWithDetails | null> => {
         try {
           const supabase = createPublicClient();
+          if (!supabase) return null;
           const { data, error } = await supabase
             .from("games")
             .select(
@@ -190,18 +193,19 @@ export const getGameBySlug = cache(
             .maybeSingle();
 
           if (!error && data) {
-            const fields = (data.game_fields || []).sort(
+            const d: any = data;
+            const fields = ((data as any).game_fields || []).sort(
               (a: any, b: any) => a.sort_order - b.sort_order
             );
-            let products = (data.products || []).sort(
+            let products = ((data as any).products || []).sort(
               (a: any, b: any) => a.sort_order - b.sort_order
             );
             if (products.length === 0) {
-              products = getMockPackagesForGame(s, data.id);
+              products = getMockPackagesForGame(s, (data as any).id);
             }
             return {
-              ...data,
-              icon: data.icon || GAME_COVERS[s] || null,
+              ...(data as any),
+              icon: (data as any).icon || GAME_COVERS[s] || null,
               game_fields: fields,
               products,
               color: COLOR_MAP[s] || "from-sky-600 to-blue-700",
@@ -232,7 +236,8 @@ export async function getAllGamesAdmin(): Promise<GameWithDetails[]> {
       )
       .order("sort_order", { ascending: true });
 
-    if (!error && data) {
+    if (!error && (data as any)) {
+            const d: any = data;
       return data.map((g: any) => ({
         ...g,
         icon: g.icon || GAME_COVERS[g.slug] || null,

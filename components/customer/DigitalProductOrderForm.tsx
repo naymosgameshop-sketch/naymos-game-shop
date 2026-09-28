@@ -61,8 +61,8 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
   const rawDescription = product.description || meta.details || meta.instructions || 'บริการสตรีมมิ่งคุณภาพสูง\nความคมชัดระดับ 4K\nรับชมได้ทันทีหลังชำระเงิน\nรับประกันตลอดอายุการใช้งาน';
   const checklistItems = rawDescription
     .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
+    .map((line: string) => line.trim())
+    .filter((line: string) => line.length > 0);
 
   const handleOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,7 +193,8 @@ export function DigitalProductOrderForm({ product }: { product: DigitalProduct }
     );
   }
 
-  const stockCount = selectedPkg?.stock ?? selectedPkg?.stock_quantity ?? 99;
+  const pkgAny = selectedPkg as any;
+  const stockCount = pkgAny?.stock ?? pkgAny?.stock_quantity ?? 99;
   const isOutOfStock = stockCount <= 0;
 
   return (

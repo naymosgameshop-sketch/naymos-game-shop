@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Layers, Gamepad2, Smartphone, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
-import { CustomerLayout } from '@/components/customer/CustomerLayout';
+import { CustomerLayout } from '@/components/layout/CustomerLayout';
 import { getDigitalProductCategories } from '@/lib/digital-products/queries';
 import { createClient } from '@/lib/supabase/server';
 

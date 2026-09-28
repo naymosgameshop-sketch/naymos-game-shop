@@ -93,7 +93,7 @@ export function DigitalProductCatalog({ products, categories }: DigitalProductCa
             );
 
             const statusLabel = allUnavailable ? 'สินค้าหมดชั่วคราว' : 'พร้อมจัดส่ง';
-            const displayImg = prod.icon || prod.image_url || prod.banner || null;
+            const displayImg = prod.icon || (prod as any).image_url || (prod as any).banner || null;
             const isHttpImg = displayImg && (displayImg.startsWith('http') || displayImg.startsWith('/'));
 
             return (

@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Server,
   ExternalLink,
+  Zap,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { AdminOrderRowActions } from './AdminOrderRowActions';

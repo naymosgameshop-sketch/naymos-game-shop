@@ -17,12 +17,13 @@ export function normalizeCartItems(items: (CartItem | Record<string, any>)[]): C
   const merged = new Map<string, CartItem>();
   for (const raw of items) {
     if (!raw || typeof raw !== "object") continue;
-    const productId = typeof raw.productId === "string" ? raw.productId : (typeof raw.product_id === "string" ? raw.product_id : null);
-    const gameId = typeof raw.gameId === "string" ? raw.gameId : (typeof raw.game_id === "string" ? raw.game_id : null);
+    const rawAny = raw as Record<string, any>;
+    const productId = typeof raw.productId === "string" ? raw.productId : (typeof rawAny.product_id === "string" ? rawAny.product_id : null);
+    const gameId = typeof raw.gameId === "string" ? raw.gameId : (typeof rawAny.game_id === "string" ? rawAny.game_id : null);
     if (!productId || !gameId) continue;
 
     const quantity = Math.max(MIN_CART_QUANTITY, Math.floor(Number(raw.quantity) || 0));
-    const rawPlayerData = raw.playerData ?? raw.player_data ?? {};
+    const rawPlayerData = rawAny.playerData ?? rawAny.player_data ?? {};
     const playerData = (typeof rawPlayerData === "object" && rawPlayerData !== null ? rawPlayerData : {}) as PlayerData;
 
     const item: CartItem = {

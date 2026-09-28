@@ -262,7 +262,7 @@ async function performProviderSync(supabase: any, provider: any) {
           }
         }
       } catch (err) {
-        console.warn('Finshop balance check error:', err?.message || 'Unknown error');
+        console.warn('Finshop balance check error:', (err as any)?.message || 'Unknown error');
       }
 
       // Fetch products
@@ -290,8 +290,8 @@ async function performProviderSync(supabase: any, provider: any) {
         const cost = Number(item.price) || 0;
         const stock = item.stock !== undefined ? Number(item.stock) : 0;
         const defaultMargin = cost > 0 ? (cost <= 30 ? 10 : Math.round(cost * 0.25)) : 0;
-        const sellingPrice = existing?.metadata?.selling_price || existing?.selling_price || (cost + defaultMargin);
-        const isActive = existing ? Boolean(existing.is_active) : false;
+        const sellingPrice = (existing as any)?.metadata?.selling_price || (existing as any)?.selling_price || (cost + defaultMargin);
+        const isActive = existing ? Boolean((existing as any)?.is_active) : false;
 
         await supabase
           .from('provider_products')
@@ -304,10 +304,10 @@ async function performProviderSync(supabase: any, provider: any) {
             is_active: isActive,
             availability: stock <= 0 ? 'out_of_stock' : 'available',
             metadata: {
-              ...(existing?.metadata || {}),
+              ...((existing as any)?.metadata || {}),
               selling_price: sellingPrice,
               duration: '30 วัน',
-              image: item.product_img || existing?.metadata?.image || '',
+              image: item.product_img || (existing as any)?.metadata?.image || '',
               product_info: item.product_info || '',
             },
             updated_at: new Date().toISOString(),
@@ -342,7 +342,7 @@ async function performProviderSync(supabase: any, provider: any) {
           }
         }
       } catch (err) {
-        console.warn('BYShop balance check error:', err?.message || 'Unknown error');
+        console.warn('BYShop balance check error:', (err as any)?.message || 'Unknown error');
       }
 
       // Fetch products
@@ -372,8 +372,8 @@ async function performProviderSync(supabase: any, provider: any) {
         const cost = Number(item.price) || 0;
         const stock = item.stock !== undefined ? Number(item.stock) : 0;
         const defaultMargin = cost > 0 ? (cost <= 30 ? 10 : Math.round(cost * 0.25)) : 0;
-        const sellingPrice = existing?.metadata?.selling_price || existing?.selling_price || (cost + defaultMargin);
-        const isActive = existing ? Boolean(existing.is_active) : false;
+        const sellingPrice = (existing as any)?.metadata?.selling_price || (existing as any)?.selling_price || (cost + defaultMargin);
+        const isActive = existing ? Boolean((existing as any)?.is_active) : false;
         const isOutOfStock = stock <= 0 || item.status === 'สินค้าหมด';
 
         await supabase
@@ -387,10 +387,10 @@ async function performProviderSync(supabase: any, provider: any) {
             is_active: isActive,
             availability: isOutOfStock ? 'out_of_stock' : 'available',
             metadata: {
-              ...(existing?.metadata || {}),
+              ...((existing as any)?.metadata || {}),
               selling_price: sellingPrice,
               duration: '30 วัน',
-              image: item.img || existing?.metadata?.image || '',
+              image: item.img || (existing as any)?.metadata?.image || '',
               product_info: item.product_info || '',
               category: item.category || 'PREMIUM_APP',
             },

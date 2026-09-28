@@ -111,7 +111,7 @@ export default async function AccountOrdersPage() {
                     </div>
 
                     <div className="text-right space-y-1">
-                      <p className="font-bold text-sm text-slate-800">฿{Number(o.total || o.amount || 0).toLocaleString()}</p>
+                      <p className="font-bold text-sm text-slate-800">฿{Number(o.total || 0).toLocaleString()}</p>
                       <span
                         className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold ${orderStatusColor(
                           o.status
