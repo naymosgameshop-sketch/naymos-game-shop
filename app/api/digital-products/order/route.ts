@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSessionUser } from '@/lib/auth/get-user';
 
@@ -120,12 +119,16 @@ export async function POST(request: Request) {
       custom_fields: customFields || {},
       digital_order: true,
       product_type: 'DIGITAL_PRODUCT',
+      digital_product_id: product.id,
+      digital_package_id: pkg.id,
     };
 
-    // 5. Clean Atomic DB Insert
+    // 5. Clean DB Insert without non-existent 'amount' column
     const isFreeOrder = total === 0;
     const nowIso = new Date().toISOString();
-    const insertPayload = {
+    
+    // Primary attempt: standard columns with order_type and digital references
+    const insertPayload: Record<string, any> = {
       order_number: orderNumber,
       order_type: 'DIGITAL_PRODUCT',
       digital_product_id: product.id,
@@ -134,7 +137,6 @@ export async function POST(request: Request) {
       subtotal,
       discount,
       total,
-      amount: total,
       status: isFreeOrder ? 'PROCESSING' : 'PENDING_PAYMENT',
       payment_confirmed_at: isFreeOrder ? nowIso : null,
       player_data: playerData,
@@ -142,11 +144,47 @@ export async function POST(request: Request) {
       updated_at: nowIso,
     };
 
-    const { data: newOrder, error: insertErr } = await adminSupabase
+    let { data: newOrder, error: insertErr } = await adminSupabase
       .from('orders')
       .insert(insertPayload)
-      .select('id, order_number, status, total, amount')
-      .single();
+      .select('id, order_number, status, total')
+      .maybeSingle();
+
+    // Resilient fallback: if schema cache hasn't synced migration 040 columns, insert baseline orders fields
+    if (insertErr && (insertErr.message?.includes('schema cache') || insertErr.code === 'PGRST204' || insertErr.code === '42703')) {
+      console.warn('Retrying order creation with baseline schema fallback:', insertErr.message);
+      const fallbackPayload = {
+        order_number: orderNumber,
+        user_id: user?.id || null,
+        subtotal,
+        discount,
+        total,
+        status: isFreeOrder ? 'PROCESSING' : 'PENDING_PAYMENT',
+        payment_confirmed_at: isFreeOrder ? nowIso : null,
+        player_data: playerData,
+        created_at: nowIso,
+        updated_at: nowIso,
+      };
+
+      const fallbackRes = await adminSupabase
+        .from('orders')
+        .insert(fallbackPayload)
+        .select('id, order_number, status, total')
+        .maybeSingle();
+
+      if (!fallbackRes.error && fallbackRes.data) {
+        newOrder = fallbackRes.data;
+        insertErr = null;
+      }
+    }
+
+    if (insertErr || !newOrder) {
+      console.error('Order creation DB error:', insertErr);
+      return NextResponse.json(
+        { success: false, message: 'ไม่สามารถสร้างคำสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง' },
+        { status: 500 }
+      );
+    }
 
     if (newOrder && isFreeOrder) {
       await adminSupabase.from('payments').insert({
@@ -157,14 +195,6 @@ export async function POST(request: Request) {
         status: 'PAID',
         expires_at: null,
       });
-    }
-
-    if (insertErr || !newOrder) {
-      console.error('Order creation DB error:', insertErr);
-      return NextResponse.json(
-        { success: false, message: 'ไม่สามารถสร้างคำสั่งซื้อได้ กรุณาลองใหม่อีกครั้ง' },
-        { status: 500 }
-      );
     }
 
     return NextResponse.json({

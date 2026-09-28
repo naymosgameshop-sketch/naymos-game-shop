@@ -48,8 +48,7 @@ export async function PUT(
               name: mock.name,
               slug: mock.slug,
               description: mock.description,
-              icon: body.icon || mock.icon || '',
-              category_type: mock.category_type || 'PREMIUM_APP',
+              image_url: body.image_url || mock.icon || '',
               is_active: true,
               sort_order: mock.sort_order || 0,
             })
@@ -67,14 +66,14 @@ export async function PUT(
       name,
       slug,
       category_id,
-      category_type,
       description,
-      icon,
+      short_description,
       image_url,
+      banner_url,
+      icon,
       banner,
       is_active,
       sort_order,
-      metadata,
       packages,
     } = body;
 
@@ -82,56 +81,38 @@ export async function PUT(
     if (name !== undefined) updateData.name = name;
     if (slug !== undefined) updateData.slug = slug;
     if (category_id !== undefined) updateData.category_id = category_id || null;
-    if (category_type !== undefined) updateData.category_type = category_type;
     if (description !== undefined) updateData.description = description;
-    if (icon !== undefined) updateData.icon = icon;
-    if (image_url !== undefined && !updateData.icon) updateData.icon = image_url;
-    if (banner !== undefined) updateData.banner = banner;
+    if (short_description !== undefined) updateData.short_description = short_description;
+    if (image_url !== undefined) updateData.image_url = image_url;
+    else if (icon !== undefined) updateData.image_url = icon;
+    if (banner_url !== undefined) updateData.banner_url = banner_url;
+    else if (banner !== undefined) updateData.banner_url = banner;
     if (is_active !== undefined) updateData.is_active = Boolean(is_active);
     if (sort_order !== undefined) updateData.sort_order = sort_order;
-    if (metadata !== undefined) updateData.metadata = metadata;
 
     if (UUID_REGEX.test(targetId)) {
-      let { data: updatedProd, error } = await supabase
+      const { data: updatedProd, error } = await supabase
         .from('digital_products')
         .update(updateData)
         .eq('id', targetId)
         .select()
         .maybeSingle();
 
-      // If icon column doesn't exist, fallback to image_url
-      if (error && (error.message?.includes('icon') || error.code === '42703')) {
-        const fallbackData = { ...updateData };
-        if (fallbackData.icon) {
-          fallbackData.image_url = fallbackData.icon;
-          delete fallbackData.icon;
-        }
-        const res2 = await supabase
-          .from('digital_products')
-          .update(fallbackData)
-          .eq('id', targetId)
-          .select()
-          .maybeSingle();
-
-        if (!res2.error) {
-          updatedProd = res2.data;
-          error = null;
-        }
-      }
-
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
 
-      // If packages are sent, update package prices / names
+      // If packages are sent, update package prices / names using valid columns
       if (Array.isArray(packages) && packages.length > 0) {
         for (const pkg of packages) {
           if (pkg.id && UUID_REGEX.test(pkg.id)) {
             const pkgUpdate: Record<string, any> = { updated_at: new Date().toISOString() };
             if (pkg.price !== undefined) pkgUpdate.price = Number(pkg.price);
             if (pkg.name !== undefined) pkgUpdate.name = pkg.name;
-            if (pkg.duration !== undefined) pkgUpdate.duration = pkg.duration;
+            if (pkg.duration_days !== undefined) pkgUpdate.duration_days = parseInt(pkg.duration_days, 10);
+            else if (pkg.duration !== undefined) pkgUpdate.duration_days = parseInt(pkg.duration, 10);
             if (pkg.is_active !== undefined) pkgUpdate.is_active = Boolean(pkg.is_active);
+            if (pkg.availability !== undefined) pkgUpdate.availability = pkg.availability;
 
             await supabase
               .from('digital_product_packages')
@@ -191,7 +172,6 @@ export async function DELETE(
       const slugToDelete = prodToDelete?.slug || targetSlug;
 
       if (slugToDelete) {
-        // If it's an API app (e.g. app-finshop-1 or app-byshop-10)
         const match = slugToDelete.match(/^app-[a-z0-9]+-(.+)$/);
         if (match) {
           const extCode = match[1];
@@ -203,21 +183,12 @@ export async function DELETE(
       }
 
       // 1. Get package IDs for this product to clean up provider routes
-      let pkgIds: string[] = [];
-      const { data: pkgs1 } = await supabase
+      const { data: pkgs } = await supabase
         .from('digital_product_packages')
         .select('id')
-        .eq('digital_product_id', targetId);
+        .eq('product_id', targetId);
 
-      if (pkgs1 && pkgs1.length > 0) {
-        pkgIds = pkgs1.map((p: any) => p.id);
-      } else {
-        const { data: pkgs2 } = await supabase
-          .from('digital_product_packages')
-          .select('id')
-          .eq('product_id', targetId);
-        if (pkgs2) pkgIds = pkgs2.map((p: any) => p.id);
-      }
+      const pkgIds = (pkgs || []).map((p: any) => p.id);
 
       if (pkgIds.length > 0) {
         await supabase
@@ -231,10 +202,10 @@ export async function DELETE(
       await supabase
         .from('digital_product_packages')
         .delete()
-        .or(`digital_product_id.eq.${targetId},product_id.eq.${targetId}`);
+        .eq('product_id', targetId);
 
       // 3. Delete fields
-      await supabase.from('digital_product_fields').delete().eq('digital_product_id', targetId);
+      await supabase.from('digital_product_fields').delete().eq('product_id', targetId);
 
       // 4. Delete the product itself
       const { error: delErr } = await supabase.from('digital_products').delete().eq('id', targetId);

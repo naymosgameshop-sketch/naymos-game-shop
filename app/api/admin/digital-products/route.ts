@@ -31,15 +31,12 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error('Fetch digital products error:', error);
-      // Fallback only when database table does not exist or has connection failure
       return NextResponse.json({
         products: MOCK_DIGITAL_PRODUCTS.map(p => ({ ...p, is_mock: true })),
         is_mock: true,
       });
     }
 
-    // If query succeeded: Return actual products from DB.
-    // If the table is empty because items were deleted, return [] so deleted items don't resurrect!
     return NextResponse.json({ products: products || [], is_mock: false });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Unauthorized' }, { status: 401 });
@@ -62,8 +59,7 @@ export async function POST(req: NextRequest) {
             name: mock.name,
             slug: mock.slug,
             description: mock.description,
-            icon: mock.icon || '',
-            category_type: mock.category_type || 'PREMIUM_APP',
+            image_url: mock.icon || '',
             is_active: true,
             sort_order: mock.sort_order || 0,
             updated_at: new Date().toISOString(),
@@ -77,20 +73,24 @@ export async function POST(req: NextRequest) {
             const { data: existing } = await supabase
               .from('digital_product_packages')
               .select('id')
-              .eq('digital_product_id', newProd.id)
+              .eq('product_id', newProd.id)
               .eq('name', pkg.name)
               .maybeSingle();
 
             if (!existing) {
+              const durationDays = parseInt(String(pkg.duration || '30'), 10) || 30;
               await supabase
                 .from('digital_product_packages')
                 .insert({
-                  digital_product_id: newProd.id,
+                  product_id: newProd.id,
                   name: pkg.name,
-                  duration: pkg.duration || '30 วัน',
+                  duration_days: durationDays,
                   price: Number(pkg.price) || 0,
-                  reseller_price: pkg.reseller_price ? Number(pkg.reseller_price) : null,
-                  cost: pkg.cost ? Number(pkg.cost) : 0,
+                  stock_type: 'UNLIMITED',
+                  stock_count: 0,
+                  delivery_type: 'MANUAL',
+                  availability: 'available',
+                  stock: 999,
                   is_active: pkg.is_active ?? true,
                   sort_order: pkg.sort_order || 1,
                 });
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. Normal creation
+    // 2. Normal creation using strictly valid schema columns
     const {
       name,
       slug,
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
       const packageRows = packages.map((pkg: any, idx: number) => ({
         product_id: newProd.id,
         name: pkg.name,
-        duration_days: pkg.duration_days ? parseInt(pkg.duration_days, 10) : (pkg.duration ? parseInt(pkg.duration, 10) : null),
+        duration_days: pkg.duration_days ? parseInt(pkg.duration_days, 10) : (pkg.duration ? parseInt(pkg.duration, 10) : 30),
         price: Number(pkg.price) || 0,
         stock_type: pkg.stock_type || 'UNLIMITED',
         stock_count: typeof pkg.stock_count === 'number' ? pkg.stock_count : 0,
