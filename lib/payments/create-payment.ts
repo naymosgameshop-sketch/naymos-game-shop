@@ -115,8 +115,45 @@ export async function ensurePaymentForOrder(
     };
   }
 
-  if (!amount || amount <= 0) {
+  if (amount === undefined || amount === null || isNaN(amount) || amount < 0) {
     return { success: false, message: 'ยอดออเดอร์ไม่ถูกต้อง' };
+  }
+
+  // Handle 0-baht (Free / Test) orders
+  if (amount === 0) {
+    if (orderStatus === 'PENDING_PAYMENT') {
+      const now = new Date().toISOString();
+      await supabase
+        .from('orders')
+        .update({
+          status: 'PROCESSING',
+          payment_confirmed_at: now,
+          updated_at: now,
+        })
+        .eq('id', orderId);
+
+      await supabase.from('payments').insert({
+        order_id: orderId,
+        provider: 'free_test',
+        payment_reference: `FREE-${num}`,
+        amount: 0,
+        status: 'PAID',
+      });
+      orderStatus = 'PROCESSING';
+    }
+
+    return {
+      success: true,
+      order_number: num,
+      order_status: orderStatus,
+      amount: 0,
+      payment_status: 'PAID',
+      payment_reference: `FREE-${num}`,
+      qr_data: null,
+      expires_at: null,
+      game_name: resolvedGameName,
+      product_name: resolvedProductName,
+    };
   }
 
   const storeSettings = await getStoreSettings();

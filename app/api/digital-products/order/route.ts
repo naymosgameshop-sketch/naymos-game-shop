@@ -123,6 +123,8 @@ export async function POST(request: Request) {
     };
 
     // 5. Clean Atomic DB Insert
+    const isFreeOrder = total === 0;
+    const nowIso = new Date().toISOString();
     const insertPayload = {
       order_number: orderNumber,
       order_type: 'DIGITAL_PRODUCT',
@@ -133,10 +135,11 @@ export async function POST(request: Request) {
       discount,
       total,
       amount: total,
-      status: 'PENDING_PAYMENT',
+      status: isFreeOrder ? 'PROCESSING' : 'PENDING_PAYMENT',
+      payment_confirmed_at: isFreeOrder ? nowIso : null,
       player_data: playerData,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: nowIso,
+      updated_at: nowIso,
     };
 
     const { data: newOrder, error: insertErr } = await adminSupabase
@@ -144,6 +147,17 @@ export async function POST(request: Request) {
       .insert(insertPayload)
       .select('id, order_number, status, total, amount')
       .single();
+
+    if (newOrder && isFreeOrder) {
+      await adminSupabase.from('payments').insert({
+        order_id: newOrder.id,
+        provider: 'free_test',
+        payment_reference: `FREE-${orderNumber}`,
+        amount: 0,
+        status: 'PAID',
+        expires_at: null,
+      });
+    }
 
     if (insertErr || !newOrder) {
       console.error('Order creation DB error:', insertErr);
