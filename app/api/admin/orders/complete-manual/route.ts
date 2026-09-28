@@ -21,15 +21,23 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient();
 
-    // Verify order is currently in PROCESSING status
+    // Verify order is currently in PROCESSING status and check order_type
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, order_number, status, player_data, user_id')
+      .select('id, order_number, status, player_data, user_id, order_type')
       .eq('id', orderId)
       .maybeSingle();
 
     if (orderErr || !order) {
       return NextResponse.json({ success: false, message: 'ไม่พบออเดอร์' }, { status: 404 });
+    }
+
+    // P0: DIGITAL PRODUCT ห้าม MANUAL SUCCESS
+    if (order.order_type === 'DIGITAL_PRODUCT') {
+      return NextResponse.json({
+        success: false,
+        message: 'สินค้าดิจิทัลไม่สามารถกดเสร็จสิ้นด้วยตนเองได้ ต้องดำเนินการจัดส่งผ่าน Provider Fulfillment เท่านั้น',
+      }, { status: 400 });
     }
 
     if (order.status !== 'PROCESSING') {
@@ -50,7 +58,7 @@ export async function POST(request: Request) {
       return NextResponse.json(rpcData);
     }
 
-    // Direct atomic update fallback
+    // Direct atomic update fallback for GAME_TOPUP only
     const now = new Date().toISOString();
     const pd = (order.player_data as Record<string, any>) || {};
     pd._fulfilled_items = fulfilledItems;

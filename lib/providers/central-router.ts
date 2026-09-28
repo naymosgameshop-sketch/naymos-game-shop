@@ -73,7 +73,8 @@ export async function dispatchCentralAction(
       .from('providers')
       .select('*')
       .eq('id', request.provider_id)
-      .single();
+      .eq('is_active', true)
+      .maybeSingle();
     targetProvider = data;
   }
 
@@ -85,9 +86,9 @@ export async function dispatchCentralAction(
       .eq('is_active', true)
       .order('priority', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (route?.provider) {
+    if (route?.provider && (route.provider as CentralProvider).is_active) {
       targetProvider = route.provider as CentralProvider;
     }
     if (route?.failover_provider_id) {
@@ -95,36 +96,72 @@ export async function dispatchCentralAction(
         .from('providers')
         .select('*')
         .eq('id', route.failover_provider_id)
-        .single();
+        .eq('is_active', true)
+        .maybeSingle();
       failoverProvider = backup;
     }
   }
 
-  // Fallback to active sandbox provider if not resolved
+  // P0: REMOVE UNSAFE PROVIDER FALLBACK
+  // Never fallback to Mock Provider for production purchases!
   if (!targetProvider) {
-    const { data } = await supabase
-      .from('providers')
-      .select('*')
-      .eq('is_active', true)
-      .order('priority', { ascending: false })
-      .limit(1)
-      .single();
+    if (request.action === 'purchase' && !request.is_sandbox) {
+      const duration = Date.now() - start;
+      const errorMsg = 'ไม่มีผู้ให้บริการ (Provider) ที่พร้อมใช้งานสำหรับรายการนี้ (ห้ามใช้ Mock ใน Production)';
+      await logApiTransaction(
+        '00000000-0000-0000-0000-000000000000',
+        request.route_key || 'UNRESOLVED',
+        request.action,
+        request.reference_id,
+        'FAILED',
+        request.payload,
+        null,
+        503,
+        duration,
+        errorMsg
+      );
 
-    targetProvider = data || {
-      id: '11111111-1111-1111-1111-111111111101',
-      code: 'mock-game-topup',
-      name: 'Default Mock Provider',
-      type: 'ALL',
-      category: 'GAME_TOPUP',
-      api_base_url: null,
-      is_active: true,
-      is_test_mode: true,
-      environment: 'sandbox',
-      priority: 1,
-      health_status: 'HEALTHY',
-      timeout_ms: 10000,
-      max_retries: 2,
-    };
+      return {
+        success: false,
+        provider_id: '',
+        provider_code: 'none',
+        action: request.action,
+        reference_id: request.reference_id,
+        http_status: 503,
+        duration_ms: duration,
+        error: errorMsg,
+      };
+    }
+
+    // Sandbox / Test mode only
+    if (request.is_sandbox) {
+      targetProvider = {
+        id: '11111111-1111-1111-1111-111111111101',
+        code: 'mock-sandbox',
+        name: 'Sandbox Mock Provider',
+        type: 'ALL',
+        category: 'GAME_TOPUP',
+        api_base_url: null,
+        is_active: true,
+        is_test_mode: true,
+        environment: 'sandbox',
+        priority: 1,
+        health_status: 'HEALTHY',
+        timeout_ms: 10000,
+        max_retries: 2,
+      };
+    } else {
+      return {
+        success: false,
+        provider_id: '',
+        provider_code: 'none',
+        action: request.action,
+        reference_id: request.reference_id,
+        http_status: 404,
+        duration_ms: Date.now() - start,
+        error: 'ไม่พบ Provider ที่ระบุ',
+      };
+    }
   }
 
   const adapter = providerRegistry.getAdapter(targetProvider!);
@@ -145,7 +182,6 @@ export async function dispatchCentralAction(
     );
     return result;
   } catch (err: any) {
-    // If failover provider is available, attempt fallback
     if (failoverProvider && failoverProvider.is_active) {
       try {
         const failoverAdapter = providerRegistry.getAdapter(failoverProvider);

@@ -1,20 +1,31 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { listProductsAdmin } from '@/lib/admin/products';
 import { getAllGamesAdmin } from '@/lib/games/queries';
+import { getDigitalProductsAdmin } from '@/lib/digital-products/queries';
 import { ProductRowActions } from '@/components/admin/ProductRowActions';
 import { ProductCreateForm } from '@/components/admin/ProductCreateForm';
+import { Gamepad2, Smartphone, Package, ExternalLink, Plus } from 'lucide-react';
 
-export const metadata: Metadata = { title: 'จัดการแพ็กเกจ' };
+export const metadata: Metadata = { title: 'สินค้า & แพ็กเกจ' };
 export const dynamic = 'force-dynamic';
 
-export default async function AdminProductsPage() {
-  const [products, games] = await Promise.all([
+export default async function AdminProductsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const currentTab = resolvedSearchParams.tab === 'digital' ? 'digital' : 'game';
+
+  const [gameProducts, games, digitalProducts] = await Promise.all([
     listProductsAdmin(),
     getAllGamesAdmin(),
+    getDigitalProductsAdmin().catch(() => []),
   ]);
 
-  const byGame = new Map<string, typeof products>();
-  for (const p of products) {
+  const byGame = new Map<string, typeof gameProducts>();
+  for (const p of gameProducts) {
     const key = p.game_name ?? 'ไม่ระบุเกม';
     const list = byGame.get(key) ?? [];
     list.push(p);
@@ -23,141 +34,159 @@ export default async function AdminProductsPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800">Package Manager (จัดการแพ็กเกจ)</h1>
-        <p className="text-sm text-slate-400">
-          แสดงข้อมูล Provider, ต้นทุน, ราคาขาย NayMos, สต็อก และสถานะเปิดขาย · ทั้งหมด {products.length} แพ็ก
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800">สินค้า & แพ็กเกจ (Product & Package Manager)</h1>
+          <p className="text-sm text-slate-400">
+            แยกการจัดการแพ็กเกจเติมเกม และแอปพรีเมียม / สินค้าดิจิทัล พร้อมควบคุมสถานะเปิดขายและตรวจสอบความพร้อม
+          </p>
+        </div>
+
+        {currentTab === 'digital' && (
+          <Link
+            href="/admin/digital-products"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-sky-500 text-white hover:bg-sky-600 transition shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>จัดการสินค้าแม่ดิจิทัล</span>
+          </Link>
+        )}
       </div>
 
-      <ProductCreateForm
-        games={games.map((g) => ({ id: g.id, name: g.name }))}
-      />
+      {/* Top 2 Tabs */}
+      <div className="flex items-center gap-2 border-b border-sky-100 pb-2">
+        <Link
+          href="/admin/products?tab=game"
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition shadow-xs ${
+            currentTab === 'game'
+              ? 'bg-sky-500 text-white shadow-sky-200'
+              : 'bg-white text-slate-600 hover:bg-sky-50 border border-sky-100'
+          }`}
+        >
+          <Gamepad2 className="w-4 h-4" />
+          <span>🎮 เติมเกม ({gameProducts.length} แพ็ก)</span>
+        </Link>
 
-      {products.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-sky-200 bg-white/80 p-10 text-center text-sm text-slate-400">
-          ยังไม่มีแพ็กเกจ — เพิ่มด้านบน หรือรัน 003_games_seed.sql
+        <Link
+          href="/admin/products?tab=digital"
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold transition shadow-xs ${
+            currentTab === 'digital'
+              ? 'bg-sky-500 text-white shadow-sky-200'
+              : 'bg-white text-slate-600 hover:bg-sky-50 border border-sky-100'
+          }`}
+        >
+          <Smartphone className="w-4 h-4" />
+          <span>📱 แอป / สินค้าดิจิทัล ({digitalProducts.length} รายการ)</span>
+        </Link>
+      </div>
+
+      {currentTab === 'game' ? (
+        <div className="space-y-8">
+          <ProductCreateForm games={games.map((g) => ({ id: g.id, name: g.name }))} />
+
+          {gameProducts.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-sky-200 bg-white/80 p-10 text-center text-sm text-slate-400">
+              ยังไม่มีแพ็กเกจเติมเกม
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {[...byGame.entries()].map(([gameName, items]) => (
+                <section key={gameName} className="bg-white rounded-3xl border border-sky-100 p-5 sm:p-6 shadow-xs">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />
+                      {gameName}
+                      <span className="text-xs text-slate-400 font-normal">({items.length} แพ็ก)</span>
+                    </h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-sky-50 text-slate-400">
+                          <th className="py-2">ชื่อแพ็กเกจ</th>
+                          <th className="py-2">ราคาขาย (NayMos)</th>
+                          <th className="py-2">ราคาตัวแทน</th>
+                          <th className="py-2">สถานะหน้าร้าน</th>
+                          <th className="py-2 text-right">จัดการ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-sky-50">
+                        {items.map((p) => (
+                          <tr key={p.id}>
+                            <td className="py-3 font-semibold text-slate-700">{p.name}</td>
+                            <td className="py-3 font-bold text-sky-600">฿{Number(p.price).toLocaleString()}</td>
+                            <td className="py-3 text-slate-500">
+                              {p.reseller_price != null ? `฿${Number(p.reseller_price).toLocaleString()}` : '—'}
+                            </td>
+                            <td className="py-3">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                p.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                              }`}>
+                                {p.is_active ? 'เปิดขาย' : 'ปิดขาย'}
+                              </span>
+                            </td>
+                            <td className="py-3 text-right">
+                              <ProductRowActions product={p} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="space-y-8">
-          {[...byGame.entries()].map(([gameName, items]) => (
-            <section key={gameName} className="bg-white rounded-3xl border border-sky-100 p-5 sm:p-6 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />
-                  {gameName}
-                  <span className="text-xs text-slate-400 font-normal">({items.length} แพ็ก)</span>
-                </h2>
-              </div>
+        /* Digital Products Tab */
+        <div className="space-y-6">
+          {digitalProducts.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-sky-200 bg-white/80 p-10 text-center text-sm text-slate-400">
+              ยังไม่มีข้อมูลสินค้าดิจิทัล
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {digitalProducts.map((dp: any) => (
+                <div key={dp.id} className="bg-white rounded-3xl border border-sky-100 p-5 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-sm">{dp.name}</h3>
+                      <span className="text-[10px] text-sky-600 font-mono">/{dp.slug}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                      dp.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      {dp.is_active ? 'เปิดขาย' : 'ปิดขาย'}
+                    </span>
+                  </div>
 
-              <div className="rounded-2xl border border-sky-100 overflow-x-auto">
-                <table className="w-full text-sm min-w-[950px] table-fixed">
-                  <thead className="bg-sky-50/50 text-slate-600 text-xs font-semibold text-left">
-                    <tr>
-                      <th className="w-[20%] px-4 py-3">ชื่อแพ็ก</th>
-                      <th className="w-[15%] px-4 py-3">Provider / External ID</th>
-                      <th className="w-[10%] px-4 py-3 text-center">Stock</th>
-                      <th className="w-[12%] px-4 py-3 text-center">Provider Status</th>
-                      <th className="w-[10%] px-4 py-3 text-center">Store Status</th>
-                      <th className="w-[33%] px-4 py-3">ต้นทุน / ราคาขาย / ราคาส่ง / จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-sky-50">
-                    {items.map((p) => {
-                      const provStatus = p.availability || 'available';
-                      const stockVal = p.stock;
+                  {dp.packages && dp.packages.length > 0 ? (
+                    <div className="space-y-2 pt-2 border-t border-slate-50 text-xs">
+                      {dp.packages.map((pkg: any) => (
+                        <div key={pkg.id} className="flex items-center justify-between py-1 bg-slate-50 px-2.5 rounded-lg">
+                          <span className="text-slate-700 font-medium truncate max-w-[150px]">{pkg.name}</span>
+                          <span className="font-bold text-sky-600">฿{Number(pkg.price).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">ยังไม่มีแพ็กเกจย่อย</p>
+                  )}
 
-                      return (
-                        <tr key={p.id} className="hover:bg-sky-50/20 transition">
-                          {/* Package Name */}
-                          <td className="px-4 py-3 text-slate-800 font-semibold truncate" title={p.name}>
-                            <div className="truncate">{p.name}</div>
-                          </td>
-
-                          {/* Provider & External ID */}
-                          <td className="px-4 py-3 text-xs">
-                            <div className="font-semibold text-slate-700">{p.provider_code || 'Direct'}</div>
-                            <div className="text-[11px] font-mono text-slate-400 truncate">
-                              ID: {p.external_product_code || '—'}
-                            </div>
-                          </td>
-
-                          {/* Stock */}
-                          <td className="px-4 py-3 text-center text-xs font-semibold">
-                            {stockVal !== null && stockVal !== undefined ? (
-                              <span className={stockVal > 0 ? 'text-slate-700' : 'text-rose-600 font-bold'}>
-                                {stockVal}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">∞</span>
-                            )}
-                          </td>
-
-                          {/* Provider Status */}
-                          <td className="px-4 py-3 text-center text-xs">
-                            {provStatus === 'available' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                🟢 Available
-                              </span>
-                            )}
-                            {provStatus === 'out_of_stock' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                🔴 Out of Stock
-                              </span>
-                            )}
-                            {provStatus === 'provider_error' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold bg-rose-50 text-rose-700 border border-rose-200" title={p.provider_status_reason || ''}>
-                                🔴 Provider Error
-                              </span>
-                            )}
-                            {provStatus === 'unavailable' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                ⚪ Unavailable
-                              </span>
-                            )}
-                            {provStatus === 'unknown' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                                🟡 Unknown
-                              </span>
-                            )}
-                          </td>
-
-                          {/* Store Status */}
-                          <td className="px-4 py-3 text-center text-xs">
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded-full font-bold ${
-                                p.is_active
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-slate-100 text-slate-500 border border-slate-200'
-                              }`}
-                            >
-                              {p.is_active ? '🟢 เปิดขาย' : '⚪ ปิดแพ็ก'}
-                            </span>
-                          </td>
-
-                          {/* Actions: Price, Cost, Toggle, Delete */}
-                          <td className="px-4 py-3">
-                            <ProductRowActions
-                              id={p.id}
-                              name={p.name}
-                              price={p.price}
-                              cost={p.cost}
-                              reseller_price={p.reseller_price}
-                              is_active={p.is_active}
-                              availability={p.availability}
-                              stock={p.stock}
-                              provider_code={p.provider_code}
-                              external_product_code={p.external_product_code}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ))}
+                  <div className="pt-2 flex justify-end">
+                    <Link
+                      href={`/admin/digital-products`}
+                      className="text-xs text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1"
+                    >
+                      <span>จัดการแพ็กเกจย่อย</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
