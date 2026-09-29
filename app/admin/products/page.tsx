@@ -82,7 +82,7 @@ export default async function AdminProductsPage({
 
       {currentTab === 'game' ? (
         <div className="space-y-8">
-          <ProductCreateForm games={games.map((g) => ({ id: g.id, name: g.name }))} />
+          <ProductCreateForm games={games.map((g: any) => ({ id: g.id, name: g.name }))} />
 
           {gameProducts.length === 0 ? (
             <div className="rounded-xl border border-dashed border-sky-200 bg-white/80 p-10 text-center text-sm text-slate-400">
@@ -111,7 +111,7 @@ export default async function AdminProductsPage({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-sky-50">
-                        {items.map((p) => (
+                        {items.map((p: any) => (
                           <tr key={p.id}>
                             <td className="py-3 font-semibold text-slate-700">{p.name}</td>
                             <td className="py-3 font-bold text-sky-600">฿{Number(p.price).toLocaleString()}</td>
@@ -126,7 +126,7 @@ export default async function AdminProductsPage({
                               </span>
                             </td>
                             <td className="py-3 text-right">
-                              <ProductRowActions product={p} />
+                              <ProductRowActions {...p} />
                             </td>
                           </tr>
                         ))}

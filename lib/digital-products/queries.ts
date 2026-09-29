@@ -167,3 +167,75 @@ export async function getActiveDigitalProducts(): Promise<DigitalProduct[]> {
     return [];
   }
 }
+
+
+export async function getDigitalProductsAdmin(): Promise<DigitalProduct[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data: prods, error: prodErr } = await supabase
+      .from('digital_products')
+      .select('*')
+      .order('sort_order', { ascending: true });
+
+    if (prodErr || !prods) return [];
+
+    let allPackages: any[] = [];
+    try {
+      const { data: pkgs } = await supabase
+        .from('digital_product_packages')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (pkgs) allPackages = pkgs;
+    } catch {}
+
+    let allFields: any[] = [];
+    try {
+      const { data: flds } = await supabase
+        .from('digital_product_fields')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (flds) allFields = flds;
+    } catch {}
+
+    return prods.map((p: any) => {
+      const pId = p.id;
+      const matchedPkgs = allPackages.filter(
+        (pkg: any) => pkg.digital_product_id === pId || pkg.product_id === pId
+      );
+      const matchedFields = allFields.filter(
+        (fld: any) => fld.digital_product_id === pId || fld.product_id === pId
+      );
+      const pkgs: DigitalProductPackage[] = matchedPkgs.map((pkg: any) => ({
+        id: pkg.id,
+        digital_product_id: pId,
+        name: pkg.name,
+        duration: pkg.duration || (pkg.duration_days ? `${pkg.duration_days} วัน` : '30 วัน'),
+        price: Number(pkg.price) || 0,
+        reseller_price: pkg.reseller_price ? Number(pkg.reseller_price) : null,
+        cost: pkg.cost ? Number(pkg.cost) : 0,
+        is_active: pkg.is_active !== false,
+        sort_order: pkg.sort_order || 0,
+      }));
+
+      const minPrice = pkgs.length > 0
+        ? pkgs.reduce((min, cur) => (cur.price < min ? cur.price : min), pkgs[0]?.price ?? 0)
+        : 0;
+
+      const iconUrl = p.icon || p.image_url || '';
+
+      return {
+        ...p,
+        icon: iconUrl,
+        image_url: iconUrl,
+        category_type: p.category_type || 'PREMIUM_APP',
+        description: p.description || '',
+        packages: pkgs,
+        fields: matchedFields,
+        minPrice,
+      };
+    });
+  } catch (err) {
+    console.error('Error in getDigitalProductsAdmin:', err);
+    return [];
+  }
+}

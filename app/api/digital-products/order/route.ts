@@ -55,12 +55,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Validate Package from DB (Active & Availability & Stock check)
-    const { data: pkg, error: pkgErr } = await adminSupabase
+    // 2. Validate Package from DB: STRICT check digital_product_packages.id = packageId AND product_id = productId
+    let { data: pkg, error: pkgErr } = await adminSupabase
       .from('digital_product_packages')
-      .select('id, name, price, is_active, availability, stock, stock_count')
+      .select('id, product_id, digital_product_id, name, price, is_active, availability, stock, stock_count')
       .eq('id', packageId)
       .maybeSingle();
+
+    if (!pkgErr && pkg) {
+      const actualProdId = pkg.product_id || pkg.digital_product_id;
+      if (actualProdId && actualProdId !== productId) {
+        return NextResponse.json(
+          { success: false, message: 'แพ็กเกจที่เลือกไม่ตรงกับหมวดหมู่สินค้าที่ระบุ' },
+          { status: 400 }
+        );
+      }
+    }
 
     if (pkgErr || !pkg) {
       return NextResponse.json(

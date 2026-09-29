@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getSessionUser } from '@/lib/auth/get-user';
 import { incrementCouponUsage } from '@/lib/coupons/validate';
 
 export async function POST(request: Request) {
@@ -12,10 +13,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'กรุณาระบุหมายเลขออเดอร์' }, { status: 400 });
     }
 
+    if (!slipBase64) {
+      return NextResponse.json({ success: false, message: 'กรุณาแนบไฟล์สลิปหลักฐานการโอนเงิน' }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
     const { data: order, error } = await supabase
       .from('orders')
-      .select('id, status, player_data')
+      .select('id, user_id, contact_email, status, player_data')
       .eq('order_number', orderNumber)
       .maybeSingle();
 
@@ -23,8 +28,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'ไม่พบหมายเลขออเดอร์นี้' }, { status: 404 });
     }
 
-    // Only orders in PENDING_PAYMENT can attach payment slip
-    if (order.status !== 'PENDING_PAYMENT') {
+    // Ownership check: If order has an assigned user_id, verify that the authenticated caller owns it
+    const currentUser = await getSessionUser();
+    if (order.user_id) {
+      if (!currentUser || currentUser.id !== order.user_id) {
+        return NextResponse.json({ 
+          success: false, 
+          message: 'คุณไม่มีสิทธิ์แนบสลิปให้กับออเดอร์ของผู้อื่น กรุณาเข้าสู่ระบบด้วยบัญชีที่สร้างออเดอร์นี้' 
+        }, { status: 403 });
+      }
+    }
+
+    // Only orders in PENDING_PAYMENT or SLIP_REJECTED can attach payment slip
+    if (order.status !== 'PENDING_PAYMENT' && order.status !== 'PAYMENT_REJECTED') {
       return NextResponse.json({ 
         success: false, 
         message: `ไม่สามารถแนบสลิปได้ เนื่องจากออเดอร์อยู่ในสถานะ ${order.status}` 
@@ -36,15 +52,20 @@ export async function POST(request: Request) {
       ...currentData,
       slip_attached: true,
       slip_timestamp: new Date().toISOString(),
-      _slip_url: slipBase64 ? String(slipBase64) : currentData._slip_url,
-      slip_image: slipBase64 ? String(slipBase64) : currentData.slip_image,
+      _slip_url: String(slipBase64),
+      slip_image: String(slipBase64),
+      payment_proof_status: 'PENDING_VERIFICATION',
     };
 
     const now = new Date().toISOString();
+    
+    // Status moves to QUEUED with verification requirement (or SLIP_UPLOADED)
+    // We update status to QUEUED so it shows in the Admin queue for verification & processing
     const { error: updateErr } = await supabase
       .from('orders')
       .update({
         status: 'QUEUED',
+        payment_method: 'PROMPTPAY',
         payment_confirmed_at: now,
         player_data: updatedData,
         updated_at: now,
@@ -65,7 +86,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: 'แนบสลิปเรียบร้อยแล้ว ออเดอร์ของคุณเข้าสู่คิวการเติมเรียบร้อยครับ',
+      message: 'แนบหลักฐานสลิปเรียบร้อยแล้ว ออเดอร์ของคุณเข้าสู่ระบบเพื่อรอการตรวจสอบและส่งมอบสินค้าครับ',
       status: 'QUEUED'
     });
   } catch (e) {
