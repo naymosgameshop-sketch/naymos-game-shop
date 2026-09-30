@@ -30,14 +30,23 @@ export class CentralProviderRegistry {
       adapter = new ByShopAdapter(provider);
     } else if (provider.code === 'ai-gateway' || provider.category === 'AI') {
       adapter = new AIGatewayAdapter(provider);
-    } else if (
-      provider.code.includes('digital') ||
-      provider.category === 'PREMIUM_APP' ||
-      provider.category === 'DIGITAL_PRODUCT'
-    ) {
-      adapter = new MockDigitalAdapter(provider);
     } else {
-      adapter = new MockGameAdapter(provider);
+      // PRODUCTION GUARD: Fail closed if provider is unknown or unconfigured
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (isProduction) {
+        throw new Error();
+      }
+
+      // In development / test environment only: allow mock adapters
+      if (
+        provider.code.includes('digital') ||
+        provider.category === 'PREMIUM_APP' ||
+        provider.category === 'DIGITAL_PRODUCT'
+      ) {
+        adapter = new MockDigitalAdapter(provider);
+      } else {
+        adapter = new MockGameAdapter(provider);
+      }
     }
 
     this.adapterCache.set(provider.code, adapter);
