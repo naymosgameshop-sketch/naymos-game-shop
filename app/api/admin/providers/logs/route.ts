@@ -1,9 +1,16 @@
+import { requireAdmin } from '@/lib/auth/get-user';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+
   try {
     const supabase = await createClient();
     const { searchParams } = new URL(req.url);
