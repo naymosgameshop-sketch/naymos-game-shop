@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/get-user';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -17,7 +18,13 @@ async function getSupabase() {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+ params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
@@ -56,7 +63,13 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+ params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
@@ -189,7 +202,13 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+ params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
