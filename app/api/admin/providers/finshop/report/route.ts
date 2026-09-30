@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/get-user';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { providerRegistry } from '@/lib/providers/central-registry';
@@ -6,6 +7,12 @@ import { CentralProvider } from '@/types/central-provider';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
