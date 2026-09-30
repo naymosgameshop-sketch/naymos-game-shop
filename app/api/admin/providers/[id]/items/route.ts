@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/get-user';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -18,7 +19,13 @@ async function getSupabase() {
 // 1. GET: Fetch existing synced products for this specific provider (NO MOCK DUMP)
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+ params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
@@ -426,7 +433,13 @@ async function performProviderSync(supabase: any, provider: any) {
 // 2. POST: Trigger sync or actions
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+ params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
@@ -685,7 +698,13 @@ async function syncItemToStorefront(
 // 3. PUT: Update item prices, toggles, or default category
 export async function PUT(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+ params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
