@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/get-user';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { MusicTrack } from '@/types/music';
@@ -22,6 +23,12 @@ const FALLBACK_TRACKS: MusicTrack[] = [
 ];
 
 export async function GET() {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -55,6 +62,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
 
@@ -102,6 +115,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { id, title, audio_url, track_volume, is_active, sort_order } = body;
@@ -158,6 +177,12 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ success: false, message: 'ไม่มีสิทธิ์ Admin' }, { status: 403 });
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
