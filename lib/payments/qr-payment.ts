@@ -53,7 +53,8 @@ export class PromptPayPayment implements PaymentProvider {
   async getPaymentStatus(
     paymentReference: string
   ): Promise<{ status: PaymentStatus; paidAt?: string }> {
-    if (paymentReference.includes('PAID')) {
+    // PRODUCTION GUARD: Prevent stub fake payment status in production
+    if (process.env.NODE_ENV !== 'production' && paymentReference.includes('PAID')) {
       return {
         status: 'PAID',
         paidAt: new Date().toISOString(),
@@ -103,7 +104,8 @@ export class MockQrPayment implements PaymentProvider {
   async getPaymentStatus(
     paymentReference: string
   ): Promise<{ status: PaymentStatus; paidAt?: string }> {
-    if (paymentReference.includes('PAID')) {
+    // PRODUCTION GUARD: Prevent stub fake payment status in production
+    if (process.env.NODE_ENV !== 'production' && paymentReference.includes('PAID')) {
       return {
         status: 'PAID',
         paidAt: new Date().toISOString(),
